@@ -169,7 +169,7 @@ $(ODIR)/protocol/mjxq.mod : $(ODIR)/mjxq_nrf24l01.bin
 	@echo Building 'mjxq' module
 	/bin/mkdir -p $(ODIR)/protocol/ 2>/dev/null; /bin/cp $< $@    
 
-(ODIR)/protocol/mt99xx.mod : $(ODIR)/mt99xx_nrf24l01.bin
+$(ODIR)/protocol/mt99xx.mod : $(ODIR)/mt99xx_nrf24l01.bin
 	@echo Building 'mt99xx' module
 	/bin/mkdir -p $(ODIR)/protocol/ 2>/dev/null; /bin/cp $< $@
 
