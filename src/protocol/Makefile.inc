@@ -33,6 +33,7 @@ PROTO_MODULES += $(ODIR)/protocol/hontai.mod
 PROTO_MODULES += $(ODIR)/protocol/fy326.mod
 PROTO_MODULES += $(ODIR)/protocol/bayang.mod
 PROTO_MODULES += $(ODIR)/protocol/mjxq.mod
+
 ALL += $(PROTO_MODULES)
 else #BUILD_TARGET
 $(ODIR)/protocol/devo.mod : $(ODIR)/devo_cyrf6936.bin
