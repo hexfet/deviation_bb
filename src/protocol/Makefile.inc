@@ -34,6 +34,7 @@ PROTO_MODULES += $(ODIR)/protocol/fy326.mod
 PROTO_MODULES += $(ODIR)/protocol/bayang.mod
 PROTO_MODULES += $(ODIR)/protocol/mjxq.mod
 PROTO_MODULES += $(ODIR)/protocol/mt99xx.mod
+PROTO_MODULES += $(ODIR)/protocol/h8-3d.mod
 
 ALL += $(PROTO_MODULES)
 else #BUILD_TARGET
@@ -172,5 +173,9 @@ $(ODIR)/protocol/mjxq.mod : $(ODIR)/mjxq_nrf24l01.bin
 $(ODIR)/protocol/mt99xx.mod : $(ODIR)/mt99xx_nrf24l01.bin
 	@echo Building 'mt99xx' module
 	/bin/mkdir -p $(ODIR)/protocol/ 2>/dev/null; /bin/cp $< $@
+
+$(ODIR)/protocol/h8-3d.mod : $(ODIR)/h8_3d_nrf24l01.bin
+	@echo Building 'h8-3d' module
+	/bin/mkdir -p $(ODIR)/protocol/ 2>/dev/null; /bin/cp $< $@    
 
 endif #BUILD_TARGET
