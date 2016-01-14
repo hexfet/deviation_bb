@@ -58,7 +58,7 @@
 #define ADDRESS_LENGTH     5
 
 static const char * const mjxq_opts[] = {
-  _tr_noop("Format"), "WLH08", "X600", "X800", NULL,
+  _tr_noop("Format"), "WLH08", "X600", "X800", "H26D", NULL,
   NULL
 };
 enum {
@@ -69,6 +69,7 @@ enum {
     FORMAT_WLH08 = 0,
     FORMAT_X600,
     FORMAT_X800,
+    FORMAT_H26D,
 };
 ctassert(LAST_PROTO_OPT <= NUM_PROTO_OPTS, too_many_protocol_opts);
 
@@ -85,7 +86,8 @@ enum {
     CHANNEL8,     // Video camera
     CHANNEL9,     // Headless
     CHANNEL10,    // Return To Home
-    CHANNEL11,    // AutoFlip By Button
+    CHANNEL11,    // AutoFlip By Button, or camera pan for H26D
+    CHANNEL12,    // Camera tilt
 };
 #define CHANNEL_LED         CHANNEL5
 #define CHANNEL_FLIP        CHANNEL6
@@ -93,7 +95,9 @@ enum {
 #define CHANNEL_VIDEO       CHANNEL8
 #define CHANNEL_HEADLESS    CHANNEL9
 #define CHANNEL_RTH         CHANNEL10
-#define CHANNEL_AUTOFLIP    CHANNEL11
+#define CHANNEL_AUTOFLIP    CHANNEL11  // X800, X600
+#define CHANNEL_PAN         CHANNEL11  // H26D
+#define CHANNEL_TILT        CHANNEL12
 
 
 enum {
@@ -121,13 +125,54 @@ static u8 checksum()
 }
 
 #define BABS(X) (((X) < 0) ? -(u8)(X) : (X))
+#define LIMIT_CHAN(X) (X < CHAN_MIN_VALUE ? CHAN_MIN_VALUE : (X > CHAN_MAX_VALUE ? CHAN_MAX_VALUE : X))
 // Channel values are sign + magnitude 8bit values
 static u8 convert_channel(u8 num)
 {
-    s32 ch = Channels[num];
-    if (ch < CHAN_MIN_VALUE)      ch = CHAN_MIN_VALUE;
-    else if (ch > CHAN_MAX_VALUE) ch = CHAN_MAX_VALUE;
+    s32 ch = LIMIT_CHAN(Channels[num]);
     return (u8) ((ch < 0 ? 0x80 : 0) | BABS(ch * 127 / CHAN_MAX_VALUE));
+}
+
+#define PAN_TILT_MAX     32   // for H26D
+#define PAN_DOWN         0x08
+#define PAN_UP           0x04
+#define TILT_DOWN        0x20
+#define TILT_UP          0x10
+typedef struct {
+    u8 channel;
+    u8 dir_pos;
+    u8 dir_neg;
+    u8 current_value;
+    u8 counter;
+} pt_info_t ; 
+
+static pt_info_t pt_info[2];
+
+static u8 pan_tilt_value()
+{
+    s32 ch;
+    s8 count;
+
+    for (int i=0; i < 2; i++) {
+        ch = LIMIT_CHAN(Channels[pt_info[i].channel]);
+//        count = PAN_TILT_MAX - BABS(ch * PAN_TILT_MAX / CHAN_MAX_VALUE);
+        count = PAN_TILT_MAX;
+        if (ch > CHAN_MAX_VALUE/2 || ch < CHAN_MIN_VALUE/2)
+            count /= 2;
+
+        pt_info[i].counter += 1;
+        if (count >= PAN_TILT_MAX) {
+            pt_info[i].current_value = 0;
+        } else if (pt_info[i].counter > count) {
+            if (pt_info[i].current_value & (pt_info[i].dir_neg + pt_info[i].dir_pos)) {
+                pt_info[i].current_value = 0;
+            } else {
+                pt_info[i].current_value = ch < 0 ? pt_info[i].dir_neg : pt_info[i].dir_pos;
+            }
+            pt_info[i].counter = 0;
+        }
+    }
+    return pt_info[0].current_value + pt_info[1].current_value;
 }
 
 #define GET_FLAG(ch, mask) (Channels[ch] > 0 ? mask : 0)
@@ -149,15 +194,19 @@ static void send_packet(u8 bind)
     packet[9] = txid[2];
 
 
+    packet[10] = 0;   // overwritten below for feature bits
     packet[11] = 0;   // overwritten below for X600
     packet[12] = 0;
     packet[13] = 0;
 
     packet[14] = 0xc0;  // bind value
     switch (Model.proto_opts[PROTOOPTS_FORMAT]) {
+    case FORMAT_H26D:
+        packet[10] = pan_tilt_value();
+        // fall through on purpose - no break
     case FORMAT_WLH08:
-        packet[10] = GET_FLAG(CHANNEL_RTH, 0x02)
-                   | GET_FLAG(CHANNEL_HEADLESS, 0x01);
+        packet[10] += GET_FLAG(CHANNEL_RTH, 0x02)
+                    | GET_FLAG(CHANNEL_HEADLESS, 0x01);
         if (!bind) {
             packet[14] = 0x04
                        | GET_FLAG(CHANNEL_FLIP, 0x01)
@@ -198,8 +247,11 @@ static void send_packet(u8 bind)
 
     
     // Power on, TX mode, 2byte CRC
-    // Why CRC0? xn297 does not interpret it - either 16-bit CRC or nothing
-    XN297_Configure(BV(NRF24L01_00_EN_CRC) | BV(NRF24L01_00_CRCO) | BV(NRF24L01_00_PWR_UP));
+    if (Model.proto_opts[PROTOOPTS_FORMAT] == FORMAT_H26D) {
+        NRF24L01_SetTxRxMode(TX_EN);
+    } else {
+        XN297_Configure(BV(NRF24L01_00_EN_CRC) | BV(NRF24L01_00_CRCO) | BV(NRF24L01_00_PWR_UP));
+    }
 
     NRF24L01_WriteReg(NRF24L01_05_RF_CH, rf_channels[rf_chan++ / 2]);
     rf_chan %= 2 * sizeof(rf_channels);  // channels repeated
@@ -207,7 +259,11 @@ static void send_packet(u8 bind)
     NRF24L01_WriteReg(NRF24L01_07_STATUS, 0x70);
     NRF24L01_FlushTx();
 
-    XN297_WritePayload(packet, PACKET_SIZE);
+    if (Model.proto_opts[PROTOOPTS_FORMAT] == FORMAT_H26D) {
+        NRF24L01_WritePayload(packet, PACKET_SIZE);
+    } else {
+        XN297_WritePayload(packet, PACKET_SIZE);
+    }
 
     // Check and adjust transmission power. We do this after
     // transmission to not bother with timeout after power
@@ -230,9 +286,16 @@ static void mjxq_init()
 {
     u8 rx_tx_addr[ADDRESS_LENGTH];
 
+    pt_info_t pt_info_initvals[] = { {CHANNEL_PAN, PAN_UP, PAN_DOWN, 0, 0},
+                                     {CHANNEL_TILT, TILT_UP, TILT_DOWN, 0, 0} };
+
+    memcpy(pt_info, pt_info_initvals, sizeof(pt_info));
+
+    memcpy(rx_tx_addr, "\x6d\x6a\x77\x77\x77", sizeof(rx_tx_addr));
     if (Model.proto_opts[PROTOOPTS_FORMAT] == FORMAT_WLH08) {
         memcpy(rf_channels, "\x12\x22\x32\x42", sizeof(rf_channels));
-        memcpy(rx_tx_addr, "\x6d\x6a\x77\x77\x77", sizeof(rx_tx_addr));
+    } else if (Model.proto_opts[PROTOOPTS_FORMAT] == FORMAT_H26D) {
+        memcpy(rf_channels, "\x36\x3e\x46\x2e", sizeof(rf_channels));
     } else {
         memcpy(rf_channels, "\x0a\x35\x42\x3d", sizeof(rf_channels));
         memcpy(rx_tx_addr, "\x6d\x6a\x73\x73\x73", sizeof(rx_tx_addr));
@@ -248,7 +311,11 @@ static void mjxq_init()
     // NRF24L01_WriteRegisterMulti(0x3e, "\xc9\x9a\xb0,\x61,\xbb,\xab,\x9c", 7); 
     // NRF24L01_WriteRegisterMulti(0x39, "\x0b\xdf\xc4,\xa7,\x03,\xab,\x9c", 7); 
 
-    XN297_SetTXAddr(rx_tx_addr, sizeof(rx_tx_addr));
+    if (Model.proto_opts[PROTOOPTS_FORMAT] == FORMAT_H26D) {
+        NRF24L01_WriteRegisterMulti(NRF24L01_10_TX_ADDR, rx_tx_addr, sizeof(rx_tx_addr));
+    } else {
+        XN297_SetTXAddr(rx_tx_addr, sizeof(rx_tx_addr));
+    }
 
     NRF24L01_FlushTx();
     NRF24L01_FlushRx();
@@ -296,9 +363,11 @@ static void mjxq_init()
 
 static void mjxq_init2()
 {
-    if (!Model.proto_opts[PROTOOPTS_FORMAT] == FORMAT_WLH08)
+    if (Model.proto_opts[PROTOOPTS_FORMAT] == FORMAT_H26D) {
+        memcpy(rf_channels, "\x32\x3e\x42\x4e", sizeof(rf_channels));
+    } else if (Model.proto_opts[PROTOOPTS_FORMAT] != FORMAT_WLH08) {
         memcpy(rf_channels, "\x0a\x46\x3a\x42", sizeof(rf_channels));
-    
+    }
 }
 
 
@@ -388,8 +457,8 @@ const void *MJXq_Cmds(enum ProtoCmds cmd)
             return (void *)(NRF24L01_Reset() ? 1L : -1L);
         case PROTOCMD_CHECK_AUTOBIND: return (void *)1L; // always Autobind
         case PROTOCMD_BIND:  initialize(); return 0;
-        case PROTOCMD_NUMCHAN: return (void *) 11L;
-        case PROTOCMD_DEFAULT_NUMCHAN: return (void *)11L;
+        case PROTOCMD_NUMCHAN: return (void *) 12L;
+        case PROTOCMD_DEFAULT_NUMCHAN: return (void *)12L;
         case PROTOCMD_CURRENT_ID: return Model.fixed_id ? (void *)((unsigned long)Model.fixed_id) : 0;
         case PROTOCMD_GETOPTIONS: return mjxq_opts;
         case PROTOCMD_TELEMETRYSTATE: return (void *)(long)PROTO_TELEM_UNSUPPORTED;
