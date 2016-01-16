@@ -384,10 +384,20 @@ static void mjxq_init()
 
 static void mjxq_init2()
 {
+  // haven't figured out txid<-->rf channel mapping for MJX models
+  // this lookup table must match mjx_txid
+  u8 mjx_rfchan[][4] = {{0x0A, 0x46, 0x3A, 0x42},
+                        {0x0A, 0x36, 0x43, 0x3E},
+                        {0x0A, 0x3C, 0x36, 0x3F},
+                        {0x0A, 0x43, 0x36, 0x3F},
+                        {0x0A, 0x47, 0x3B, 0x43},
+                        {0x0A, 0x3F, 0x46, 0x3B},
+                        {0x0A, 0x35, 0x42, 0x3D}};
+
     if (Model.proto_opts[PROTOOPTS_FORMAT] == FORMAT_H26D) {
         memcpy(rf_channels, "\x32\x3e\x42\x4e", sizeof(rf_channels));
     } else if (Model.proto_opts[PROTOOPTS_FORMAT] != FORMAT_WLH08) {
-        memcpy(rf_channels, "\x0a\x46\x3a\x42", sizeof(rf_channels));
+        memcpy(rf_channels, mjx_rfchan[Model.fixed_id % (sizeof(mjx_rfchan)/sizeof(rf_channels))], sizeof(rf_channels));
     }
 }
 
@@ -424,6 +434,17 @@ static void initialize_txid()
 {
     u32 lfsr = 0xb2c54a2ful;
 
+    // haven't figured out txid<-->rf channel mapping for MJX models
+    // this lookup table must match mjx_rfchan
+    u8 mjx_txid[][3] = {{0xF8, 0x4F, 0x1C},
+                        {0xC9, 0x67, 0x40},
+                        {0xC8, 0x6E, 0x02}, 
+                        {0x48, 0x6A, 0x40},
+                        {0xE9, 0x98, 0x02}, 
+                        {0xCA, 0xD9, 0xB6},
+                        {0x30, 0xF9, 0x72}};
+
+
 #ifndef USE_FIXED_MFGID
     u8 var[12];
     MCU_SerialNumber(var, 12);
@@ -448,9 +469,7 @@ static void initialize_txid()
         txid[1] = (lfsr >> 8 ) & 0xff;
         txid[2] = lfsr & 0xff; 
     } else {
-        txid[0] = 0xf8 + (Model.fixed_id & 0xff); //(lfsr >> 16) & 0xff;
-        txid[1] = (0x4f + ((Model.fixed_id >> 8) & 0xff)); //(lfsr >> 8 ) & 0xff;
-        txid[2] = (0x1c + ((Model.fixed_id >> 16) & 0xff)); //lfsr & 0xff; 
+        memcpy(txid, mjx_txid[Model.fixed_id % (sizeof(mjx_txid)/sizeof(txid))], sizeof(txid));
     }
 }
 
