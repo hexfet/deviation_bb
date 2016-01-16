@@ -138,19 +138,19 @@ static u8 convert_channel(u8 num)
 #define PAN_UP           0x04
 #define TILT_DOWN        0x20
 #define TILT_UP          0x10
-
-u8 pan_tilt_value()
+static u8 pan_tilt_value()
 {
+    static u8 count;
     u8 pan = 0;
-
-    counter++;  // reuse global counter
+    
+    count++;
 
     s32 ch = LIMIT_CHAN(Channels[CHANNEL_PAN]);
-    if ((ch < CHAN_MIN_VALUE/2 || ch > CHAN_MAX_VALUE/2) && (counter & PAN_TILT_COUNT))
+    if ((ch < CHAN_MIN_VALUE/2 || ch > CHAN_MAX_VALUE/2) && (count & PAN_TILT_COUNT))
         pan = ch < 0 ? PAN_DOWN : PAN_UP;
 
     ch = LIMIT_CHAN(Channels[CHANNEL_TILT]);
-    if ((ch < CHAN_MIN_VALUE/2 || ch > CHAN_MAX_VALUE/2) && (counter & PAN_TILT_COUNT))
+    if ((ch < CHAN_MIN_VALUE/2 || ch > CHAN_MAX_VALUE/2) && (count & PAN_TILT_COUNT))
         return pan + (ch < 0 ? TILT_DOWN : TILT_UP);
         
     return pan;
@@ -222,7 +222,7 @@ static void send_packet(u8 bind)
     packet[14] = 0xc0;  // bind value
     switch (Model.proto_opts[PROTOOPTS_FORMAT]) {
     case FORMAT_H26D:
-        packet[10] = bind ? 0 : pan_tilt_value();
+        packet[10] = pan_tilt_value();
         // fall through on purpose - no break
     case FORMAT_WLH08:
         packet[10] += GET_FLAG(CHANNEL_RTH, 0x02)
