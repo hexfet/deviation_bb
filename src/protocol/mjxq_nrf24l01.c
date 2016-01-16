@@ -133,11 +133,30 @@ static u8 convert_channel(u8 num)
     return (u8) ((ch < 0 ? 0x80 : 0) | BABS(ch * 127 / CHAN_MAX_VALUE));
 }
 
-#define PAN_TILT_MAX     32   // for H26D
+#define PAN_TILT_COUNT     16   // for H26D - match stock tx timing
 #define PAN_DOWN         0x08
 #define PAN_UP           0x04
 #define TILT_DOWN        0x20
 #define TILT_UP          0x10
+
+u8 pan_tilt_value()
+{
+    u8 pan = 0;
+
+    counter++;  // reuse global counter
+
+    s32 ch = LIMIT_CHAN(Channels[CHANNEL_PAN]);
+    if ((ch < CHAN_MIN_VALUE/2 || ch > CHAN_MAX_VALUE/2) && (counter & PAN_TILT_COUNT))
+        pan = ch < 0 ? PAN_DOWN : PAN_UP;
+
+    ch = LIMIT_CHAN(Channels[CHANNEL_TILT]);
+    if ((ch < CHAN_MIN_VALUE/2 || ch > CHAN_MAX_VALUE/2) && (counter & PAN_TILT_COUNT))
+        return pan + (ch < 0 ? TILT_DOWN : TILT_UP);
+        
+    return pan;
+}
+
+#if 0
 typedef struct {
     u8 channel;
     u8 dir_pos;
@@ -148,7 +167,7 @@ typedef struct {
 
 static pt_info_t pt_info[2];
 
-static u8 pan_tilt_value()
+u8 pan_tilt_value()
 {
     s32 ch;
     s8 count;
@@ -174,6 +193,7 @@ static u8 pan_tilt_value()
     }
     return pt_info[0].current_value + pt_info[1].current_value;
 }
+#endif
 
 #define GET_FLAG(ch, mask) (Channels[ch] > 0 ? mask : 0)
 #define GET_FLAG_INV(ch, mask) (Channels[ch] < 0 ? mask : 0)
@@ -202,7 +222,7 @@ static void send_packet(u8 bind)
     packet[14] = 0xc0;  // bind value
     switch (Model.proto_opts[PROTOOPTS_FORMAT]) {
     case FORMAT_H26D:
-        packet[10] = pan_tilt_value();
+        packet[10] = bind ? 0 : pan_tilt_value();
         // fall through on purpose - no break
     case FORMAT_WLH08:
         packet[10] += GET_FLAG(CHANNEL_RTH, 0x02)
@@ -286,10 +306,11 @@ static void mjxq_init()
 {
     u8 rx_tx_addr[ADDRESS_LENGTH];
 
+#if 0
     pt_info_t pt_info_initvals[] = { {CHANNEL_PAN, PAN_UP, PAN_DOWN, 0, 0},
                                      {CHANNEL_TILT, TILT_UP, TILT_DOWN, 0, 0} };
-
     memcpy(pt_info, pt_info_initvals, sizeof(pt_info));
+#endif
 
     memcpy(rx_tx_addr, "\x6d\x6a\x77\x77\x77", sizeof(rx_tx_addr));
     if (Model.proto_opts[PROTOOPTS_FORMAT] == FORMAT_WLH08) {
