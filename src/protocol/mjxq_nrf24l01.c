@@ -388,7 +388,6 @@ static void initialize_txid()
 {
     u32 lfsr = 0xb2c54a2ful;
 
-
 #ifndef USE_FIXED_MFGID
     u8 var[12];
     MCU_SerialNumber(var, 12);
