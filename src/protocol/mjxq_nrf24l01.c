@@ -387,12 +387,8 @@ static void mjxq_init2()
   // haven't figured out txid<-->rf channel mapping for MJX models
   // this lookup table must match mjx_txid
   u8 mjx_rfchan[][4] = {{0x0A, 0x46, 0x3A, 0x42},
-                        {0x0A, 0x36, 0x43, 0x3E},
                         {0x0A, 0x3C, 0x36, 0x3F},
-                        {0x0A, 0x43, 0x36, 0x3F},
-                        {0x0A, 0x47, 0x3B, 0x43},
-                        {0x0A, 0x3F, 0x46, 0x3B},
-                        {0x0A, 0x35, 0x42, 0x3D}};
+                        {0x0A, 0x43, 0x36, 0x3F}};
 
     if (Model.proto_opts[PROTOOPTS_FORMAT] == FORMAT_H26D) {
         memcpy(rf_channels, "\x32\x3e\x42\x4e", sizeof(rf_channels));
@@ -437,12 +433,8 @@ static void initialize_txid()
     // haven't figured out txid<-->rf channel mapping for MJX models
     // this lookup table must match mjx_rfchan
     u8 mjx_txid[][3] = {{0xF8, 0x4F, 0x1C},
-                        {0xC9, 0x67, 0x40},
                         {0xC8, 0x6E, 0x02}, 
-                        {0x48, 0x6A, 0x40},
-                        {0xE9, 0x98, 0x02}, 
-                        {0xCA, 0xD9, 0xB6},
-                        {0x30, 0xF9, 0x72}};
+                        {0x48, 0x6A, 0x40}};
 
 
 #ifndef USE_FIXED_MFGID
