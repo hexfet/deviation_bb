@@ -330,7 +330,6 @@ static void ht_init2()
     data_tx_addr[2] = addr_vals[2][ txid[4]       & 0x0f];
     data_tx_addr[3] = addr_vals[3][(txid[4] >> 4) & 0x0f];
 
-// dbgprintf("setting tx address %02x %02x %02x %02x %02x\n", data_tx_addr[0], data_tx_addr[1], data_tx_addr[2], data_tx_addr[3], data_tx_addr[4]);
     if (Model.proto_opts[PROTOOPTS_FORMAT] == FORMAT_HONTAI) {
         XN297_SetTXAddr(data_tx_addr, sizeof(data_tx_addr));
     } else {
@@ -389,25 +388,16 @@ static void initialize_txid()
     for (u8 i = 0; i < sizeof(lfsr); ++i) rand32_r(&lfsr, 0);
 
     if (Model.proto_opts[PROTOOPTS_FORMAT] == FORMAT_HONTAI) {
-        txid[0] = 0x4c; // first three bytes ignored by receiver - set same as stock tx
+        txid[0] = 0x4c; // first three bytes some kind of model id? - set same as stock tx
         txid[1] = 0x4b;
         txid[2] = 0x3a;
-    } else {    // JJRC X1
-        txid[0] = 0x4b;
+    } else {
+        txid[0] = 0x4b; // JJRC X1
         txid[1] = 0x59;
         txid[2] = 0x3a;
     }
     txid[3] = (lfsr >> 8 ) & 0xff;
     txid[4] = lfsr & 0xff; 
-#if 0
-      } else {    // JJRC X1
-        txid[0] = 0x4b;
-        txid[1] = 0x59;
-        txid[2] = 0x3a;
-        txid[3] = 0x38; // (lfsr >> 8 ) & 0xff;
-        txid[4] = 0x05; // lfsr & 0xff; 
-    }
-#endif
 }
 
 static void initialize()
