@@ -88,6 +88,7 @@ enum {
     CHANNEL11,    // Calibrate
 };
 #define CHANNEL_LED         CHANNEL5
+#define CHANNEL_ARM         CHANNEL5    // for JJRC X1
 #define CHANNEL_FLIP        CHANNEL6
 #define CHANNEL_PICTURE     CHANNEL7
 #define CHANNEL_VIDEO       CHANNEL8
@@ -188,7 +189,7 @@ static void send_packet(u8 bind)
       if (Model.proto_opts[PROTOOPTS_FORMAT] == FORMAT_HONTAI) {
           packet[0] = 0x0b;
       } else {
-          packet[0] = 0x00;
+          packet[0] = GET_FLAG(CHANNEL_ARM, 0x02);
       }
       packet[1] = 0x00;
       packet[2] = 0x00;
@@ -198,6 +199,8 @@ static void send_packet(u8 bind)
       if (Model.proto_opts[PROTOOPTS_FORMAT] == FORMAT_HONTAI) {
           packet[4] |= GET_FLAG(CHANNEL_RTH, 0x80)
                      | GET_FLAG(CHANNEL_HEADLESS, 0x40);
+      } else {
+          packet[4] |= 0x80;                                // not sure what this bit does
       }
       packet[5] = scale_channel(CHANNEL2, 0, 63)            // elevator
                 | GET_FLAG(CHANNEL_CALIBRATE, 0x80)
@@ -389,15 +392,22 @@ static void initialize_txid()
         txid[0] = 0x4c; // first three bytes ignored by receiver - set same as stock tx
         txid[1] = 0x4b;
         txid[2] = 0x3a;
-        txid[3] = (lfsr >> 8 ) & 0xff;
-        txid[4] = lfsr & 0xff; 
-    } else {
+    } else {    // JJRC X1
+        txid[0] = 0x4b;
+        txid[1] = 0x59;
+        txid[2] = 0x3a;
+    }
+    txid[3] = (lfsr >> 8 ) & 0xff;
+    txid[4] = lfsr & 0xff; 
+#if 0
+      } else {    // JJRC X1
         txid[0] = 0x4b;
         txid[1] = 0x59;
         txid[2] = 0x3a;
         txid[3] = 0x38; // (lfsr >> 8 ) & 0xff;
         txid[4] = 0x05; // lfsr & 0xff; 
     }
+#endif
 }
 
 static void initialize()
