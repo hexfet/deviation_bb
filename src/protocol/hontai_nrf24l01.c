@@ -129,9 +129,6 @@ static const u8 addr_vals[4][16] = {
                     {0x25, 0x29, 0x2b, 0x2d, 0x33, 0x35, 0x49, 0x4b,
                      0x4d, 0x59, 0x5b, 0x65, 0x69, 0x6b, 0x6d, 0x6e}};
 
-
-#define TX_ADDRESS_LENGTH  sizeof(rx_tx_addr)
-
 // Bit vector from bit position
 #define BV(bit) (1 << bit)
 
@@ -268,22 +265,28 @@ static void ht_init()
     // NRF24L01_WriteRegisterMulti(0x39, "\x0b\xdf\xc4,\xa7,\x03,\xab,\x9c", 7); 
 
     if (Model.proto_opts[PROTOOPTS_FORMAT] == FORMAT_HONTAI) {
-        XN297_SetTXAddr(rx_tx_addr, TX_ADDRESS_LENGTH);
+        XN297_SetTXAddr(rx_tx_addr, sizeof(rx_tx_addr));
     } else {
-        NRF24L01_WriteRegisterMulti(NRF24L01_10_TX_ADDR, rx_tx_addr, TX_ADDRESS_LENGTH);
+        NRF24L01_WriteRegisterMulti(NRF24L01_10_TX_ADDR, rx_tx_addr, sizeof(rx_tx_addr));
     }
 
     NRF24L01_FlushTx();
     NRF24L01_FlushRx();
     NRF24L01_WriteReg(NRF24L01_07_STATUS, 0x70);     // Clear data ready, data sent, and retransmit
     NRF24L01_WriteReg(NRF24L01_01_EN_AA, 0x00);      // No Auto Acknowldgement on all data pipes
-    NRF24L01_WriteReg(NRF24L01_04_SETUP_RETR, 0x00); // no retransmits
     NRF24L01_SetBitrate(NRF24L01_BR_1M);             // 1Mbps
     NRF24L01_SetPower(Model.tx_power);
-    NRF24L01_Activate(0x73);                          // Activate feature register
-    NRF24L01_WriteReg(NRF24L01_1C_DYNPD, 0x00);       // Disable dynamic payload length on all pipes
-    NRF24L01_WriteReg(NRF24L01_1D_FEATURE, 0x00);
-    NRF24L01_Activate(0x73);
+    NRF24L01_Activate(0x73);                              // Activate feature register
+    if (Model.proto_opts[PROTOOPTS_FORMAT] == FORMAT_HONTAI) {
+        NRF24L01_WriteReg(NRF24L01_04_SETUP_RETR, 0x00);  // no retransmits
+        NRF24L01_WriteReg(NRF24L01_1C_DYNPD, 0x00);       // Disable dynamic payload length on all pipes
+        NRF24L01_WriteReg(NRF24L01_1D_FEATURE, 0x00);
+        NRF24L01_Activate(0x73);                          // Deactivate feature register
+    } else {
+        NRF24L01_WriteReg(NRF24L01_04_SETUP_RETR, 0xff);  // JJRC uses dynamic payload length
+        NRF24L01_WriteReg(NRF24L01_1C_DYNPD, 0x3f);       // match other stock settings even though AA disabled...
+        NRF24L01_WriteReg(NRF24L01_1D_FEATURE, 0x07);
+    }
 
     // Check for Beken BK2421/BK2423 chip
     // It is done by using Beken specific activate code, 0x53
@@ -324,10 +327,11 @@ static void ht_init2()
     data_tx_addr[2] = addr_vals[2][ txid[4]       & 0x0f];
     data_tx_addr[3] = addr_vals[3][(txid[4] >> 4) & 0x0f];
 
+// dbgprintf("setting tx address %02x %02x %02x %02x %02x\n", data_tx_addr[0], data_tx_addr[1], data_tx_addr[2], data_tx_addr[3], data_tx_addr[4]);
     if (Model.proto_opts[PROTOOPTS_FORMAT] == FORMAT_HONTAI) {
-        XN297_SetTXAddr(data_tx_addr, TX_ADDRESS_LENGTH);
+        XN297_SetTXAddr(data_tx_addr, sizeof(data_tx_addr));
     } else {
-        NRF24L01_WriteRegisterMulti(NRF24L01_10_TX_ADDR, data_tx_addr, TX_ADDRESS_LENGTH);
+        NRF24L01_WriteRegisterMulti(NRF24L01_10_TX_ADDR, data_tx_addr, sizeof(data_tx_addr));
     }
 }
 
