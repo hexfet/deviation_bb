@@ -332,11 +332,7 @@ static void cx10_init()
     NRF24L01_WriteReg(NRF24L01_11_RX_PW_P0, packet_size); // bytes of data payload for rx pipe 1 
     NRF24L01_WriteReg(NRF24L01_05_RF_CH, RF_BIND_CHANNEL);
     NRF24L01_WriteReg(NRF24L01_06_RF_SETUP, 0x07);
-    if( Model.proto_opts[PROTOOPTS_FORMAT] == FORMAT_Q242) {
-        NRF24L01_SetBitrate(NRF24L01_BR_2M);
-    } else {
-        NRF24L01_SetBitrate(NRF24L01_BR_1M);
-    }
+    NRF24L01_SetBitrate(NRF24L01_BR_1M);
     NRF24L01_SetPower(Model.tx_power);
     
     // this sequence necessary for module from stock tx
