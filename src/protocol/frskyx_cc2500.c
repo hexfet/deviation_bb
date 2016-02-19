@@ -56,7 +56,7 @@ ctassert(LAST_PROTO_OPT <= NUM_PROTO_OPTS, too_many_protocol_opts);
 #define TELEM_ON  0
 #define TELEM_OFF 1
 
-#define TELEM_PKTSIZE 27
+#define PACKETSIZE 27
 #define PACKET_SIZE   30
 
 static u8 chanskip;
@@ -171,6 +171,8 @@ static void frskyX_build_bind_packet()
   packet[1] = 0x03;          
   packet[2] = 0x01;               
 
+//    packet[3] = crc_Byte(rx_tx_addr[3]);
+//    packet[4] = crc_Byte(rx_tx_addr[2]);
   packet[3] = fixed_id;
   packet[4] = fixed_id >> 8;
   int idx = ((state - FRSKY_BIND) % 10) * 5;
@@ -197,13 +199,14 @@ static void frskyX_build_bind_packet()
 static u16 scaleForPXX( u8 i )
 { //mapped 860,2140(125%) range to 64,1984(PXX values);
 //  return (u16)(((Servo_data[i]-PPM_MIN)*3)>>1)+64;
+// 0-2047, 0 = 817, 1024 = 1500, 2047 = 2182
+// H (0)7-4, L (0)3-0, H (1)3-0, L (0)11-8, H (1)11-8, L (1)7-4 etc
     if(i >= Model.num_channels)
         return 814;
     else
-        return (s32)Channels[i] * 936 / CHAN_MAX_VALUE + 814;
+        return Channels[i] * 936 / CHAN_MAX_VALUE + 814;
 }
-
-
+ 
 static void frskyX_data_frame() {
   //0x1D 0xB3 0xFD 0x02 0x56 0x07 0x15 0x00 0x00 0x00 0x04 0x40 0x00 0x04 0x40 0x00 0x04 0x40 0x00 0x04 0x40 0x08 0x00 0x00 0x00 0x00 0x00 0x00 0x96 0x12
 
@@ -263,12 +266,75 @@ static void frskyX_data_frame() {
     for(int i=1; i < PACKET_SIZE; i++) printf(" %02x", packet[i]);
     printf("\n");
 #endif
+} 
+
+
+// Telemetry
+/* SPORT details serial
+  100K 8E2 normal-multiprotocol
+  -every 12ms-
+  1  2  3  4  5  6  7  8  9  CRC DESCR
+  7E 98 10 05 F1 20 23 0F 00 A6 SWR_ID 
+  7E 98 10 01 F1 33 00 00 00 C9 RSSI_ID 
+  7E 98 10 04 F1 58 00 00 00 A1 BATT_ID 
+  7E BA 10 03 F1 E2 00 00 00 18 ADC2_ID 
+  7E BA 10 03 F1 E2 00 00 00 18 ADC2_ID 
+  7E BA 10 03 F1 E2 00 00 00 18 ADC2_ID 
+  7E BA 10 03 F1 E2 00 00 00 18 ADC2_ID 
+  7E BA 10 03 F1 E2 00 00 00 18 ADC2_ID 
+  7E BA 10 03 F1 E2 00 00 00 18 ADC2_ID   
+  
+  
+  Telemetry frames(RF) SPORT info 15 bytes
+  SPORT frame 6+3 bytes
+  [00] PKLEN  0E 0E 0E 0E 
+  [01] TXID1  DD DD DD DD 
+  [02] TXID2  6D 6D 6D 6D 
+  [03] CONST  02 02 02 02 
+  [04] RS/RB  2C D0 2C CE // D0,CE = 2*RSSI; ....2C = RX battery voltage(5V from Bec)
+  [05] ?????  03 10 21 32 // TX/RX telemetry hand-shake bytes
+  [06] NO.BT  00 00 06 03 // No.of valid SPORT frame bytes in the frame    
+  [07] STRM1  00 00 7E 00 
+  [08] STRM2  00 00 1A 00 
+  [09] STRM3  00 00 10 00 
+  [10] STRM4  03 03 03 03  
+  [11] STRM5  F1 F1 F1 F1 
+  [12] STRM6  D1 D1 D0 D0
+  [13] CHKSUM1
+  [14] CHKSUM2
+*/
+
+void frsky_check_telemetry(u8 *packet, u8 len) {
+    u8 AD2gain = Model.proto_opts[PROTO_OPTS_AD2GAIN];
+
+    // only packets with the required id and packet length
+    if (packet[1] == (fixed_id & 0xff) && packet[2] == (fixed_id >> 8) && len == packet[0] + 3) {
+        if (packet[4] > 0x36) {   // 0x36 magic number? TODO
+    //        rssi=pktt[4] / 2;
+            Telemetry.value[TELEM_FRSKY_RSSI] = pkt[4] / 2; 	// Value in Db TODO
+            TELEMETRY_SetUpdated(TELEM_FRSKY_RSSI);
+        } else {
+    //        RxBt=pktt[4];         
+            Telemetry.value[TELEM_FRSKY_VOLT1] = pkt[4];      // In 1/100 of Volts TODO
+            TELEMETRY_SetUpdated(TELEM_FRSKY_VOLT1);
+        }
+        u8 j=7;
+        for (u8 i=0; i < packet[6]; i++) {
+            if (packet[j++]==0x03)
+              if (packet[j]==0xF1) {
+    //              ADC2=packet[j+1];
+                  Telemetry.value[TELEM_FRSKY_VOLT2] = packet[j+1] * (132*AD2gain) / 1000; //In 1/100 of Volts *(A2gain/10) TODO
+                  TELEMETRY_SetUpdated(TELEM_FRSKY_VOLT2);
+                  break;
+              }
+        }
+    }
 }
 
   
 u16 frskyx_cb() {
   u8 len;
-  u8 pkt[TELEM_PKTSIZE];
+  u8 pkt[PACKETSIZE];
 printf("state %d\n", state);
 
   switch(state) { 
@@ -308,13 +374,9 @@ printf("state %d\n", state);
       return 3000;
     case FRSKY_DATA4:
       len = CC2500_ReadReg(CC2500_3B_RXBYTES | CC2500_READ_BURST) & 0x7F; 
-      if (len && len < TELEM_PKTSIZE) {
-        CC2500_ReadData(pkt, len);
-        #if defined TELEMETRY
-          frsky_check_telemetry(pkt,len); //check if valid telemetry packets
-          //parse telemetry packets here
-          //The same telemetry function used by FrSky(D8).
-        #endif
+      if (len && len < PACKET_SIZE) {
+          CC2500_ReadData(packet, len);
+          frsky_check_telemetry(packet, len); //check if valid telemetry packets
       }
       state = FRSKY_DATA1;
       return 300;
