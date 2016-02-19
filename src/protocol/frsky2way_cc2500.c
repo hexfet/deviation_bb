@@ -181,8 +181,8 @@ static void frsky2way_build_data_packet()
         if(i >= Model.num_channels) {
             value = 0x8ca;
         } else {
-            value = (s32)Channels[i] * 600 / CHAN_MAX_VALUE + 0x8ca;
-        }
+            value = (s32)Channels[i] * 600 / CHAN_MAX_VALUE + 0x8ca; // 0-2047, 0 = 817, 1024 = 1500, 2047 = 2182
+        }                                                            // H (0)7-4, L (0)3-0, H (1)3-0, L (0)11-8, H (1)11-8, L (1)7-4 etc
         if(i < 4) {
             packet[6+i] = value & 0xff;
             packet[10+(i>>1)] |= ((value >> 8) & 0x0f) << (4 *(i & 0x01));
@@ -197,6 +197,191 @@ static void frsky2way_build_data_packet()
     //    printf("\n");
     //}
 }
+
+void frsky_parse_telem_byte(u8 byte) {
+    static int8_t structPos;
+    static uint8_t lowByte;
+    static TS_STATE state = TS_IDLE;
+
+    if (byte == 0x5e) {
+      state = TS_DATA_ID;
+      return;
+    }
+    if (state == TS_IDLE) {
+      return;
+    }
+    if (state & TS_XOR) {
+      byte = byte ^ 0x60;
+      state = (TS_STATE)(state - TS_XOR);
+    }
+    else if (byte == 0x5d) {
+      state = (TS_STATE)(state | TS_XOR);
+      return;
+    }
+    if (state == TS_DATA_ID) {
+      if (byte > 0x3f) {
+        state = TS_IDLE;
+      }
+      else {
+        structPos = byte * 2;
+        state = TS_DATA_LOW;
+      }
+      return;
+    }
+    if (state == TS_DATA_LOW) {
+      lowByte = byte;
+      state = TS_DATA_HIGH;
+      return;
+    }
+
+    state = TS_IDLE;
+
+    u16 value = (byte << 8) + lowByte;
+    switch(structPos) {
+      //defined in protocol_sensor_hub.pdf
+      case 0x01: //GPS_ALT (whole number & sign) -500m-9000m (.01m/count)
+          //convert to mm
+          saved[0] = value;
+          break;
+      case 0x09: //GPS_ALT (fraction)
+          if (last_id == 0x01) {
+              Telemetry.gps.altitude = ((s16)saved[0] * 100 + value) * 10;
+              TELEMETRY_SetUpdated(TELEM_GPS_ALT);
+          }
+          break;
+      case 0x02: //TEMP1 -30C-250C (1C/ count)
+          Telemetry.value[TELEM_FRSKY_TEMP1] = value;
+          TELEMETRY_SetUpdated(TELEM_FRSKY_TEMP1);
+          break;
+      case 0x03: //RPM   0-60000
+          Telemetry.value[TELEM_FRSKY_RPM] = value * 60;
+          TELEMETRY_SetUpdated(TELEM_FRSKY_RPM);
+          break;
+      case 0x04: //Fuel  0, 25, 50, 75, 100
+          Telemetry.value[TELEM_FRSKY_FUEL] = value;
+          TELEMETRY_SetUpdated(TELEM_FRSKY_FUEL);
+          break;
+      case 0x05: //TEMP2 -30C-250C (1C/ count)
+          Telemetry.value[TELEM_FRSKY_TEMP2] = value;
+          TELEMETRY_SetUpdated(TELEM_FRSKY_TEMP2);
+          break;
+      case 0x06: { //Battery voltages - CELL# and VOLT
+          u8 cell = lobyte >> 4;
+          value = (((u16)(lobyte & 0x0F) << 8) + hibyte) / 5;
+          if (cell < 6 || value == 0) {
+              Telemetry.value[TELEM_FRSKY_VOLT3] +=
+                value - Telemetry.value[TELEM_FRSKY_CELL1 + cell];
+              TELEMETRY_SetUpdated(TELEM_FRSKY_VOLT3);
+
+              Telemetry.value[TELEM_FRSKY_CELL1 + cell] = value;
+              TELEMETRY_SetUpdated(TELEM_FRSKY_CELL1 + cell);
+              if (Telemetry.value[TELEM_FRSKY_MIN_CELL] == 0 ||
+                  (value < Telemetry.value[TELEM_FRSKY_MIN_CELL])) {
+                  Telemetry.value[TELEM_FRSKY_MIN_CELL] = value;
+                  TELEMETRY_SetUpdated(TELEM_FRSKY_MIN_CELL);
+              }
+          }
+          break;
+      }
+#if HAS_FRSKY_EXTENDED_TELEMETRY
+      case 0x10: //ALT (whole number & sign) -500m-9000m (.01m/count)
+          saved[0] = value;
+          break;
+      case 0x21: //ALT (fraction)
+          if (last_id == 0x10) {
+              //convert to mm
+              Telemetry.value[TELEM_FRSKY_ALTITUDE] = saved[0];
+              Telemetry.value[TELEM_FRSKY_ALTITUDE_DECIMETERS] = value;
+              TELEMETRY_SetUpdated(TELEM_FRSKY_ALTITUDE);
+          }
+          break;
+#endif
+      case 0x11: //GPS Speed (whole number and sign) in Knots
+          saved[0] = value;
+          break;
+      case 0x19: //GPS Speed (fraction)
+          if (last_id == 0x11) {
+              // Convert 1/100 knot to mm/sec
+              Telemetry.gps.velocity = (saved[0] * 100 + value) * 5556 / 1080;
+              TELEMETRY_SetUpdated(TELEM_GPS_SPEED);
+          }
+          break;
+      case 0x12: //GPS Longitude (whole number) dddmm.mmmm
+          saved[0] = value;
+          break;
+      case 0x1A: //GPS Longitude (fraction)
+          if (last_id == 0x12)
+              saved[1] = value;
+          break;
+      case 0x22: //GPS Longitude E/W
+          if (last_id == 0x1A) {
+              s32 deg = saved[0] / 100;
+              s32 min = saved[0] % 100;
+              Telemetry.gps.longitude = (deg * 60 + min) * 60 * 1000 + saved[1] * 6;
+              if (value == 'W')
+                  Telemetry.gps.longitude = -Telemetry.gps.longitude;
+              TELEMETRY_SetUpdated(TELEM_GPS_LONG);
+          }
+          break;
+      case 0x13: //GPS Latitude (whole number) ddmm.mmmm
+          saved[0] = value;
+          break;
+      case 0x1B: //GPS Latitude (fraction)
+          if (last_id == 0x13)
+              saved[1] = value;
+          break;
+      case 0x23: //GPS Latitude N/S
+          if (last_id == 0x1B) {
+              s32 deg = saved[0] / 100;
+              s32 min = saved[0] % 100;
+              Telemetry.gps.latitude = (deg * 60 + min) * 60 * 1000 + saved[1] * 6;
+              if (value == 'S')
+                  Telemetry.gps.latitude = -Telemetry.gps.latitude;
+              TELEMETRY_SetUpdated(TELEM_GPS_LAT);
+          }
+          break;
+      //case 0x14: //GPS Compass (whole number) (0-259.99) (.01degree/count)
+      //case 0x1C: //GPS Compass (fraction)
+      case 0x15: //GPS Date/Month
+          saved[0] = (lobyte & 0x1F)  //day
+                   | ((hibyte & 0x0F) << 5); //month
+          break;
+      case 0x16: //GPS Year
+          if (last_id == 0x15)
+              saved[1] = value & 0x3F;
+          break;
+      case 0x17: //GPS Hour/Minute
+          if (last_id == 0x16)
+              saved[2] = ((lobyte & 0x1F) << 6)  //hour
+                       | (hibyte & 0x3F);  //min
+          break;
+      case 0x18: //GPS Second
+          if (last_id == 0x17) {
+            Telemetry.gps.time = ((u32)saved[0] << 17) | ((u32)saved[1] << 26)
+                               | ((u32)saved[2] << 6) | ((u32)value & 0x3F);
+              TELEMETRY_SetUpdated(TELEM_GPS_TIME);
+          }
+          break;
+      //case 0x24: //Accel X
+      //case 0x25: //Accel Y
+      //case 0x26: //Accel Z
+      case 0x28: //Current 0A-100A (0.1A/count)
+          Telemetry.value[TELEM_FRSKY_CURRENT] = value;
+          TELEMETRY_SetUpdated(TELEM_FRSKY_CURRENT);
+          break;
+      case 0x3A: //Ampere sensor (whole number) (measured as V) 0V-48V (0.5V/count)
+          saved[0] = value;
+          break;
+      case 0x3B: //Ampere sensor (fractional)
+          if (last_id == 0x3A) {
+            Telemetry.value[TELEM_FRSKY_VOLTA] = saved[0] * 50 + value / 2;
+            TELEMETRY_SetUpdated(TELEM_FRSKY_VOLTA);
+          }
+          break;
+    }
+    last_id = structPos;
+}
+
 
 static void frsky2way_parse_telem(u8 *pkt, int len)
 {
@@ -224,178 +409,10 @@ static void frsky2way_parse_telem(u8 *pkt, int len)
     TELEMETRY_SetUpdated(TELEM_FRSKY_RSSI);
 
     for(int i = 6; i < len - 4; i++) {
-        if(pkt[i] != 0x5e)
-           continue;
-        u8 id = pkt[i + 1];
-        if (id > 0x3F)
-            continue;
-        i += 1;
-
-        // Deal with stuffing bytes
-        u8 lobyte = pkt[i + 1];
-        if (lobyte == 0x5e)
-            continue;
-        if (lobyte == 0x5d) {
-            lobyte = pkt[++i + 1] ^ 0x60;
-            if (lobyte != 0x5e && lobyte != 0x5d)
-                continue;
-        }
-        u8 hibyte = pkt[++i + 1];
-        if (hibyte == 0x5e)
-            continue;
-        if (hibyte == 0x5d) {
-            hibyte = pkt[++i + 1] ^ 0x60;
-            if (hibyte != 0x5e && hibyte != 0x5d)
-                continue;
-        }
-        if (pkt[++i + 1] != 0x5e)
-          continue;
-        u16 value = (hibyte << 8) + lobyte;
-        switch(id) {
-          //defined in protocol_sensor_hub.pdf
-          case 0x01: //GPS_ALT (whole number & sign) -500m-9000m (.01m/count)
-              //convert to mm
-              saved[0] = value;
-              break;
-          case 0x09: //GPS_ALT (fraction)
-              if (last_id == 0x01) {
-                  Telemetry.gps.altitude = ((s16)saved[0] * 100 + value) * 10;
-                  TELEMETRY_SetUpdated(TELEM_GPS_ALT);
-              }
-              break;
-          case 0x02: //TEMP1 -30C-250C (1C/ count)
-              Telemetry.value[TELEM_FRSKY_TEMP1] = value;
-              TELEMETRY_SetUpdated(TELEM_FRSKY_TEMP1);
-              break;
-          case 0x03: //RPM   0-60000
-              Telemetry.value[TELEM_FRSKY_RPM] = value * 60;
-              TELEMETRY_SetUpdated(TELEM_FRSKY_RPM);
-              break;
-          case 0x04: //Fuel  0, 25, 50, 75, 100
-              Telemetry.value[TELEM_FRSKY_FUEL] = value;
-              TELEMETRY_SetUpdated(TELEM_FRSKY_FUEL);
-              break;
-          case 0x05: //TEMP2 -30C-250C (1C/ count)
-              Telemetry.value[TELEM_FRSKY_TEMP2] = value;
-              TELEMETRY_SetUpdated(TELEM_FRSKY_TEMP2);
-              break;
-          case 0x06: { //Battery voltages - CELL# and VOLT
-              u8 cell = lobyte >> 4;
-              value = (((u16)(lobyte & 0x0F) << 8) + hibyte) / 5;
-              if (cell < 6 || value == 0) {
-                  Telemetry.value[TELEM_FRSKY_VOLT3] +=
-                    value - Telemetry.value[TELEM_FRSKY_CELL1 + cell];
-                  TELEMETRY_SetUpdated(TELEM_FRSKY_VOLT3);
-
-                  Telemetry.value[TELEM_FRSKY_CELL1 + cell] = value;
-                  TELEMETRY_SetUpdated(TELEM_FRSKY_CELL1 + cell);
-                  if (Telemetry.value[TELEM_FRSKY_MIN_CELL] == 0 ||
-                      (value < Telemetry.value[TELEM_FRSKY_MIN_CELL])) {
-                      Telemetry.value[TELEM_FRSKY_MIN_CELL] = value;
-                      TELEMETRY_SetUpdated(TELEM_FRSKY_MIN_CELL);
-                  }
-              }
-              break;
-          }
-#if HAS_FRSKY_EXTENDED_TELEMETRY
-          case 0x10: //ALT (whole number & sign) -500m-9000m (.01m/count)
-              saved[0] = value;
-              break;
-          case 0x21: //ALT (fraction)
-              if (last_id == 0x10) {
-                  //convert to mm
-                  Telemetry.value[TELEM_FRSKY_ALTITUDE] = saved[0];
-                  Telemetry.value[TELEM_FRSKY_ALTITUDE_DECIMETERS] = value;
-                  TELEMETRY_SetUpdated(TELEM_FRSKY_ALTITUDE);
-              }
-              break;
-#endif
-          case 0x11: //GPS Speed (whole number and sign) in Knots
-              saved[0] = value;
-              break;
-          case 0x19: //GPS Speed (fraction)
-              if (last_id == 0x11) {
-                  // Convert 1/100 knot to mm/sec
-                  Telemetry.gps.velocity = (saved[0] * 100 + value) * 5556 / 1080;
-                  TELEMETRY_SetUpdated(TELEM_GPS_SPEED);
-              }
-              break;
-          case 0x12: //GPS Longitude (whole number) dddmm.mmmm
-              saved[0] = value;
-              break;
-          case 0x1A: //GPS Longitude (fraction)
-              if (last_id == 0x12)
-                  saved[1] = value;
-              break;
-          case 0x22: //GPS Longitude E/W
-              if (last_id == 0x1A) {
-                  s32 deg = saved[0] / 100;
-                  s32 min = saved[0] % 100;
-                  Telemetry.gps.longitude = (deg * 60 + min) * 60 * 1000 + saved[1] * 6;
-                  if (value == 'W')
-                      Telemetry.gps.longitude = -Telemetry.gps.longitude;
-                  TELEMETRY_SetUpdated(TELEM_GPS_LONG);
-              }
-              break;
-          case 0x13: //GPS Latitude (whole number) ddmm.mmmm
-              saved[0] = value;
-              break;
-          case 0x1B: //GPS Latitude (fraction)
-              if (last_id == 0x13)
-                  saved[1] = value;
-              break;
-          case 0x23: //GPS Latitude N/S
-              if (last_id == 0x1B) {
-                  s32 deg = saved[0] / 100;
-                  s32 min = saved[0] % 100;
-                  Telemetry.gps.latitude = (deg * 60 + min) * 60 * 1000 + saved[1] * 6;
-                  if (value == 'S')
-                      Telemetry.gps.latitude = -Telemetry.gps.latitude;
-                  TELEMETRY_SetUpdated(TELEM_GPS_LAT);
-              }
-              break;
-          //case 0x14: //GPS Compass (whole number) (0-259.99) (.01degree/count)
-          //case 0x1C: //GPS Compass (fraction)
-          case 0x15: //GPS Date/Month
-              saved[0] = (lobyte & 0x1F)  //day
-                       | ((hibyte & 0x0F) << 5); //month
-              break;
-          case 0x16: //GPS Year
-              if (last_id == 0x15)
-                  saved[1] = value & 0x3F;
-              break;
-          case 0x17: //GPS Hour/Minute
-              if (last_id == 0x16)
-                  saved[2] = ((lobyte & 0x1F) << 6)  //hour
-                           | (hibyte & 0x3F);  //min
-              break;
-          case 0x18: //GPS Second
-              if (last_id == 0x17) {
-                Telemetry.gps.time = ((u32)saved[0] << 17) | ((u32)saved[1] << 26)
-                                   | ((u32)saved[2] << 6) | ((u32)value & 0x3F);
-                  TELEMETRY_SetUpdated(TELEM_GPS_TIME);
-              }
-              break;
-          //case 0x24: //Accel X
-          //case 0x25: //Accel Y
-          //case 0x26: //Accel Z
-          case 0x28: //Current 0A-100A (0.1A/count)
-              Telemetry.value[TELEM_FRSKY_CURRENT] = value;
-              TELEMETRY_SetUpdated(TELEM_FRSKY_CURRENT);
-              break;
-          case 0x3A: //Ampere sensor (whole number) (measured as V) 0V-48V (0.5V/count)
-              saved[0] = value;
-              break;
-          case 0x3B: //Ampere sensor (fractional)
-              if (last_id == 0x3A) {
-                Telemetry.value[TELEM_FRSKY_VOLTA] = saved[0] * 50 + value / 2;
-                TELEMETRY_SetUpdated(TELEM_FRSKY_VOLTA);
-              }
-              break;
-        }
-        last_id = id;
+      frsky_parse_telem_byte(pkt[i]);
     }
 }
+
 
 static u16 frsky2way_cb()
 {
