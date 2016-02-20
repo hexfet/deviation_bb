@@ -82,7 +82,7 @@ static enum {
 static u16 fixed_id;
 static u8 packet[PACKET_SIZE];
 
-static const u8 hop_data[] = {
+static u8 hop_data[] = {
   0x02, 0xD4, 0xBB, 0xA2, 0x89,
   0x70, 0x57, 0x3E, 0x25, 0x0C,
   0xDE, 0xC5, 0xAC, 0x93, 0x7A,
@@ -96,11 +96,11 @@ static const u8 hop_data[] = {
 };
 
 
-static const u16 CRCTable[] = {
+static u16 CRCTable[] = {
   0x0000,0x1189,0x2312,0x329b,0x4624,0x57ad,0x6536,0x74bf,
   0x8c48,0x9dc1,0xaf5a,0xbed3,0xca6c,0xdbe5,0xe97e,0xf8f7,
   0x1081,0x0108,0x3393,0x221a,0x56a5,0x472c,0x75b7,0x643e,
-  0x9cc9,0x8d40,0xbfdb,0xae52,0xdaed,0xcb64,0xf9ff,0xe876,
+ 0x9cc9,0x8d40,0xbfdb,0xae52,0xdaed,0xcb64,0xf9ff,0xe876,
   0x2102,0x308b,0x0210,0x1399,0x6726,0x76af,0x4434,0x55bd,
   0xad4a,0xbcc3,0x8e58,0x9fd1,0xeb6e,0xfae7,0xc87c,0xd9f5,
   0x3183,0x200a,0x1291,0x0318,0x77a7,0x662e,0x54b5,0x453c,
@@ -302,7 +302,6 @@ static void frskyX_data_frame() {
   [12] STRM6  D1 D1 D0 D0
   [13] CHKSUM1
   [14] CHKSUM2
-*/
 
 void frsky_check_telemetry(u8 *packet, u8 len) {
     u8 AD2gain = Model.proto_opts[PROTO_OPTS_AD2GAIN];
@@ -331,11 +330,10 @@ void frsky_check_telemetry(u8 *packet, u8 len) {
     }
 }
 
+*/
   
 u16 frskyx_cb() {
   u8 len;
-  u8 pkt[PACKETSIZE];
-printf("state %d\n", state);
 
   switch(state) { 
     default: 
@@ -376,7 +374,7 @@ printf("state %d\n", state);
       len = CC2500_ReadReg(CC2500_3B_RXBYTES | CC2500_READ_BURST) & 0x7F; 
       if (len && len < PACKET_SIZE) {
           CC2500_ReadData(packet, len);
-          frsky_check_telemetry(packet, len); //check if valid telemetry packets
+//          frsky_check_telemetry(packet, len); //check if valid telemetry packets
       }
       state = FRSKY_DATA1;
       return 300;
