@@ -329,6 +329,7 @@ void frsky_check_telemetry(u8 *packet, u8 len) {
         }
     }
 }
+*/
 
 */
   
