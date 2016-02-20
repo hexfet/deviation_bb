@@ -302,7 +302,6 @@ static void frskyX_data_frame() {
   [12] STRM6  D1 D1 D0 D0
   [13] CHKSUM1
   [14] CHKSUM2
-*/
 
 void frsky_check_telemetry(u8 *packet, u8 len) {
     u8 AD2gain = Model.proto_opts[PROTO_OPTS_AD2GAIN];
@@ -330,12 +329,11 @@ void frsky_check_telemetry(u8 *packet, u8 len) {
         }
     }
 }
+*/
 
   
 u16 frskyx_cb() {
   u8 len;
-  u8 pkt[PACKETSIZE];
-printf("state %d\n", state);
 
   switch(state) { 
     default: 
@@ -376,7 +374,7 @@ printf("state %d\n", state);
       len = CC2500_ReadReg(CC2500_3B_RXBYTES | CC2500_READ_BURST) & 0x7F; 
       if (len && len < PACKET_SIZE) {
           CC2500_ReadData(packet, len);
-          frsky_check_telemetry(packet, len); //check if valid telemetry packets
+//          frsky_check_telemetry(packet, len); //check if valid telemetry packets
       }
       state = FRSKY_DATA1;
       return 300;
