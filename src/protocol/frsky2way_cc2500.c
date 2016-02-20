@@ -198,10 +198,13 @@ static void frsky2way_build_data_packet()
     //}
 }
 
-void frsky_parse_telem_byte(u8 byte) {
+void frsky_parse_telem_stream(u8 byte) {
     static int8_t structPos;
     static uint8_t lowByte;
     static TS_STATE state = TS_IDLE;
+    static u16 saved[3] = {0, 0, 0};
+    static u8 last_id = 0;
+
 
     if (byte == 0x5e) {
       state = TS_DATA_ID;
@@ -266,8 +269,8 @@ void frsky_parse_telem_byte(u8 byte) {
           TELEMETRY_SetUpdated(TELEM_FRSKY_TEMP2);
           break;
       case 0x06: { //Battery voltages - CELL# and VOLT
-          u8 cell = lobyte >> 4;
-          value = (((u16)(lobyte & 0x0F) << 8) + hibyte) / 5;
+          u8 cell = (value >> 4) & 0x0f;
+          value = (((u16)(value & 0x0F) << 8) + (value & 0xff00)) / 5;
           if (cell < 6 || value == 0) {
               Telemetry.value[TELEM_FRSKY_VOLT3] +=
                 value - Telemetry.value[TELEM_FRSKY_CELL1 + cell];
@@ -285,15 +288,13 @@ void frsky_parse_telem_byte(u8 byte) {
       }
 #if HAS_FRSKY_EXTENDED_TELEMETRY
       case 0x10: //ALT (whole number & sign) -500m-9000m (.01m/count)
-          saved[0] = value;
+          Telemetry.value[TELEM_FRSKY_ALTITUDE] = value;
+          TELEMETRY_SetUpdated(TELEM_FRSKY_ALTITUDE);
           break;
       case 0x21: //ALT (fraction)
-          if (last_id == 0x10) {
               //convert to mm
-              Telemetry.value[TELEM_FRSKY_ALTITUDE] = saved[0];
-              Telemetry.value[TELEM_FRSKY_ALTITUDE_DECIMETERS] = value;
-              TELEMETRY_SetUpdated(TELEM_FRSKY_ALTITUDE);
-          }
+          Telemetry.value[TELEM_FRSKY_ALTITUDE_DECIMETERS] = value;
+          TELEMETRY_SetUpdated(TELEM_FRSKY_ALTITUDE);
           break;
 #endif
       case 0x11: //GPS Speed (whole number and sign) in Knots
@@ -343,8 +344,8 @@ void frsky_parse_telem_byte(u8 byte) {
       //case 0x14: //GPS Compass (whole number) (0-259.99) (.01degree/count)
       //case 0x1C: //GPS Compass (fraction)
       case 0x15: //GPS Date/Month
-          saved[0] = (lobyte & 0x1F)  //day
-                   | ((hibyte & 0x0F) << 5); //month
+          saved[0] = (value & 0x1F)  //day
+                   | (((value >> 8) & 0x0F) << 5); //month
           break;
       case 0x16: //GPS Year
           if (last_id == 0x15)
@@ -352,8 +353,8 @@ void frsky_parse_telem_byte(u8 byte) {
           break;
       case 0x17: //GPS Hour/Minute
           if (last_id == 0x16)
-              saved[2] = ((lobyte & 0x1F) << 6)  //hour
-                       | (hibyte & 0x3F);  //min
+              saved[2] = ((value & 0x1F) << 6)  //hour
+                       | ((value >> 8) & 0x3F);  //min
           break;
       case 0x18: //GPS Second
           if (last_id == 0x17) {
@@ -385,8 +386,6 @@ void frsky_parse_telem_byte(u8 byte) {
 
 static void frsky2way_parse_telem(u8 *pkt, int len)
 {
-    static u16 saved[3] = {0, 0, 0};
-    static u8 last_id = 0;
     u8 AD2gain = Model.proto_opts[PROTO_OPTS_AD2GAIN];
     //byte1 == data len (+ 2 for CRC)
     //byte 2,3 = fixed=id
@@ -408,9 +407,8 @@ static void frsky2way_parse_telem(u8 *pkt, int len)
     Telemetry.value[TELEM_FRSKY_RSSI] = pkt[5]; 	// Value in Db
     TELEMETRY_SetUpdated(TELEM_FRSKY_RSSI);
 
-    for(int i = 6; i < len - 4; i++) {
-      frsky_parse_telem_byte(pkt[i]);
-    }
+    for(int i = 6; i < len - 4; i++)
+        frsky_parse_telem_stream(pkt[i]);
 }
 
 
