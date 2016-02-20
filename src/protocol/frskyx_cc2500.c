@@ -331,7 +331,6 @@ void frsky_check_telemetry(u8 *packet, u8 len) {
 }
 */
 
-*/
   
 u16 frskyx_cb() {
   u8 len;
