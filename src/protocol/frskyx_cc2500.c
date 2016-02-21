@@ -65,7 +65,7 @@ static u8 ctr;
 static u8 FS_flag = 0;
 static s8 coarse;
 static s8 fine;
-static unionu8 send_seq;
+static u8 send_seq;
 // u8 ptr[4] = {0x01,0x12,0x23,0x30};
 //u8 ptr[4] = {0x00,0x11,0x22,0x33};
 static enum {
@@ -308,7 +308,6 @@ static void frskyX_data_frame() {
   [12] STRM6  D1 D1 D0 D0
   [13] CHKSUM1
   [14] CHKSUM2
-*/
 
 void frsky_check_telemetry(u8 *packet, u8 len) {
     u8 AD2gain = Model.proto_opts[PROTO_OPTS_AD2GAIN];
@@ -324,7 +323,7 @@ void frsky_check_telemetry(u8 *packet, u8 len) {
             Telemetry.value[TELEM_FRSKY_VOLT1] = pkt[4];      // In 1/100 of Volts TODO
             TELEMETRY_SetUpdated(TELEM_FRSKY_VOLT1);
         }
-
+#if 0
         if (pkt[5] & 0x03 == send_seq) send_seq = (send_seq+1) % 4; // doesn't really matter since no tx stream data
         if ((pkt[5] >> 4) & 0x03 == (last_rcvd_seq+1) % 3) {
             frsky_check_telemetry_stream_sport(&packet
@@ -338,8 +337,10 @@ void frsky_check_telemetry(u8 *packet, u8 len) {
                   break;
               }
         }
+#endif
     }
 }
+*/
 
   
 u16 frskyx_cb() {
@@ -384,7 +385,7 @@ u16 frskyx_cb() {
       len = CC2500_ReadReg(CC2500_3B_RXBYTES | CC2500_READ_BURST) & 0x7F; 
       if (len && len < PACKET_SIZE) {
           CC2500_ReadData(packet, len);
-          frsky_check_telemetry(packet, len); //check if valid telemetry packets
+//          frsky_check_telemetry(packet, len); //check if valid telemetry packets
       }
       state = FRSKY_DATA1;
       return 300;
@@ -513,7 +514,7 @@ const void *FRSKYX_Cmds(enum ProtoCmds cmd)
         case PROTOCMD_GETOPTIONS:
             return frskyx_opts;
         case PROTOCMD_TELEMETRYSTATE:
-            return (void *)(long)(Model.proto_opts[PROTO_OPTS_TELEM] == TELEM_ON ? PROTO_TELEM_ON : PROTO_TELEM_OFF);
+            return (void *)1L;
         case PROTOCMD_RESET:
         case PROTOCMD_DEINIT:
             CLOCK_StopTimer();
