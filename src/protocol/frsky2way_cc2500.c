@@ -241,10 +241,10 @@ void frsky_parse_telem_stream(u8 byte) {
 // store "before punctuation" and "after punctuation" values locally
 // keeps Telemetry.gps compatible with devo and dsm
 static struct s_fr_gps {
-    s32 latitude_bp;
-    s32 latitude_ap;
-    s32 longitude_bp;
-    s32 longitude_ap;
+    s16 latitude_bp;
+    s16 latitude_ap;
+    s16 longitude_bp;
+    s16 longitude_ap;
     s16 altitude_bp;
     s16 altitude_ap;
     s16 velocity_bp;
