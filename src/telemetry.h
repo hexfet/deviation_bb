@@ -106,6 +106,17 @@ enum {
     TELEM_DSM_LAST,
 };
 
+
+// FrSky telemetry stream state machine
+typedef enum {
+  TS_IDLE = 0,  // waiting for 0x5e frame marker
+  TS_DATA_ID,   // waiting for dataID
+  TS_DATA_LOW,  // waiting for data low byte
+  TS_DATA_HIGH, // waiting for data high byte
+  TS_XOR = 0x80 // decode stuffed byte
+} TS_STATE;
+
+
 enum {
     TELEM_FRSKY_VOLT1 = 1,
     TELEM_FRSKY_VOLT2,
