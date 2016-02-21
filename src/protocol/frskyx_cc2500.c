@@ -189,9 +189,16 @@ static void frskyX_build_bind_packet()
 //  for(u8 i = 13;i<28;i++)
 //    packet[i] = crc_Byte(0);
 
-  *(u16 *)&packet[28] = crc(&packet[3], 25);
 //  packet[28] = crc >> 8;
 //  packet[29] = crc;
+  u16 lcrc = crc(&packet[3], 25);
+  packet[28] = lcrc >> 8;
+  packet[29] = lcrc;
+#ifdef EMULATOR
+    printf("packet %02x", packet[0]);
+    for(int i=1; i < PACKET_SIZE; i++) printf(" %02x", packet[i]);
+    printf("\n");
+#endif
 
 }
 
@@ -258,9 +265,11 @@ static void frskyX_data_frame() {
   for (u8 i = 22;i<28;i++)
     packet[i] = 0;
   
-  *(u16 *)&packet[28] = crc(&packet[3], 25);
 //  packet[28] = highByte(crc);
 //  packet[29] = lowByte(crc);
+  u16 lcrc = crc(&packet[3], 25);
+  packet[28] = lcrc >> 8;
+  packet[29] = lcrc;
 #ifdef EMULATOR
     printf("packet %02x", packet[0]);
     for(int i=1; i < PACKET_SIZE; i++) printf(" %02x", packet[i]);
