@@ -139,9 +139,9 @@ static u8 crc_Byte( u8 byte )
   return byte;
 }
 */
-static u8 crc(u8 *data, u8 len) {
-  u16 crc = *data++;
-  for(int i=0; i < len-1; i++)
+static u16 crc(u8 *data, u8 len) {
+  u16 crc = 0;
+  for(int i=0; i < len; i++)
       crc = (crc<<8) ^ CRCTable[((u8)(crc>>8) ^ *data++) & 0xFF];
   return crc;
 }
@@ -189,7 +189,7 @@ static void frskyX_build_bind_packet()
 //  for(u8 i = 13;i<28;i++)
 //    packet[i] = crc_Byte(0);
 
-  *(u8 *)&packet[28] = crc(&packet[3], 25);
+  *(u16 *)&packet[28] = crc(&packet[3], 25);
 //  packet[28] = crc >> 8;
 //  packet[29] = crc;
 
@@ -258,7 +258,7 @@ static void frskyX_data_frame() {
   for (u8 i = 22;i<28;i++)
     packet[i] = 0;
   
-  *(u8 *)&packet[28] = crc(&packet[3], 25);
+  *(u16 *)&packet[28] = crc(&packet[3], 25);
 //  packet[28] = highByte(crc);
 //  packet[29] = lowByte(crc);
 #ifdef EMULATOR
