@@ -38,17 +38,15 @@
 
 
 static const char * const frskyx_opts[] = {
-  _tr_noop("Telemetry"),  _tr_noop("On"), _tr_noop("Off"), NULL,
   _tr_noop("Freq-Fine"),  "-127", "127", NULL,
   _tr_noop("Freq-Coarse"),  "-127", "127", NULL,
   _tr_noop("AD2GAIN"),  "1", "255", NULL,
   NULL
 };
 enum {
-    PROTO_OPTS_TELEM = 0,
-    PROTO_OPTS_FREQFINE = 1,
-    PROTO_OPTS_FREQCOARSE = 2,
-    PROTO_OPTS_AD2GAIN = 3,
+    PROTO_OPTS_FREQFINE,
+    PROTO_OPTS_FREQCOARSE,
+    PROTO_OPTS_AD2GAIN,
     LAST_PROTO_OPT,
 };
 ctassert(LAST_PROTO_OPT <= NUM_PROTO_OPTS, too_many_protocol_opts);
@@ -67,6 +65,7 @@ static u8 ctr;
 static u8 FS_flag = 0;
 static s8 coarse;
 static s8 fine;
+static unionu8 send_seq;
 // u8 ptr[4] = {0x01,0x12,0x23,0x30};
 //u8 ptr[4] = {0x00,0x11,0x22,0x33};
 static enum {
@@ -255,10 +254,8 @@ static void frskyX_data_frame() {
     packet[9+i+1] = (((chan_0>>8) & 0x0F)|(chan_1 << 4));
     packet[9+i+2] = chan_1>>4;
   }
-  //packet[21] = 0x08;//first 
+
   packet[21] = 0x80;//??? when received first telemetry frame is changed to 0x80
-  //packet[21] = ptr[p];//??? 
-      //p = (p+1)%4;//repeating 4 bytes sequence pattern  every 4th frame.
   
   lpass += 1;
   
@@ -311,6 +308,7 @@ static void frskyX_data_frame() {
   [12] STRM6  D1 D1 D0 D0
   [13] CHKSUM1
   [14] CHKSUM2
+*/
 
 void frsky_check_telemetry(u8 *packet, u8 len) {
     u8 AD2gain = Model.proto_opts[PROTO_OPTS_AD2GAIN];
@@ -326,6 +324,10 @@ void frsky_check_telemetry(u8 *packet, u8 len) {
             Telemetry.value[TELEM_FRSKY_VOLT1] = pkt[4];      // In 1/100 of Volts TODO
             TELEMETRY_SetUpdated(TELEM_FRSKY_VOLT1);
         }
+
+        if (pkt[5] & 0x03 == send_seq) send_seq = (send_seq+1) % 4; // doesn't really matter since no tx stream data
+        if ((pkt[5] >> 4) & 0x03 == (last_rcvd_seq+1) % 3) {
+            frsky_check_telemetry_stream_sport(&packet
         u8 j=7;
         for (u8 i=0; i < packet[6]; i++) {
             if (packet[j++]==0x03)
@@ -338,7 +340,6 @@ void frsky_check_telemetry(u8 *packet, u8 len) {
         }
     }
 }
-*/
 
   
 u16 frskyx_cb() {
@@ -383,7 +384,7 @@ u16 frskyx_cb() {
       len = CC2500_ReadReg(CC2500_3B_RXBYTES | CC2500_READ_BURST) & 0x7F; 
       if (len && len < PACKET_SIZE) {
           CC2500_ReadData(packet, len);
-//          frsky_check_telemetry(packet, len); //check if valid telemetry packets
+          frsky_check_telemetry(packet, len); //check if valid telemetry packets
       }
       state = FRSKY_DATA1;
       return 300;
