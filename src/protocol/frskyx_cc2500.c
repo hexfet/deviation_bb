@@ -62,10 +62,9 @@ static u8 calData[48][3];
 static u8 channr;
 static u8 counter_rst;
 static u8 ctr;
-static u8 FS_flag = 0;
 static s8 coarse;
 static s8 fine;
-static u8 seq_last_sent = 8;
+static u8 seq_last_sent;
 static u8 seq_last_rcvd;
 // u8 ptr[4] = {0x01,0x12,0x23,0x30};
 //u8 ptr[4] = {0x00,0x11,0x22,0x33};
@@ -206,7 +205,6 @@ static u16 scaleForPXX( u8 i )
 { //mapped 860,2140(125%) range to 64,1984(PXX values);
 //  return (u16)(((Servo_data[i]-PPM_MIN)*3)>>1)+64;
 // 0-2047, 0 = 817, 1024 = 1500, 2047 = 2182
-// H (0)7-4, L (0)3-0, H (1)3-0, L (0)11-8, H (1)11-8, L (1)7-4 etc
     if(i >= Model.num_channels)
         return 814;
     else
@@ -215,11 +213,12 @@ static u16 scaleForPXX( u8 i )
  
 static void frskyX_data_frame() {
   //0x1D 0xB3 0xFD 0x02 0x56 0x07 0x15 0x00 0x00 0x00 0x04 0x40 0x00 0x04 0x40 0x00 0x04 0x40 0x00 0x04 0x40 0x08 0x00 0x00 0x00 0x00 0x00 0x00 0x96 0x12
+  // channel packing: H (0)7-4, L (0)3-0; H (1)3-0, L (0)11-8; H (1)11-8, L (1)7-4 etc
 
   static u8 lpass;
   u16 chan_0 ;
   u16 chan_1 ; 
-  u8 flag2 = 0;
+  u8 FS_flag = 0;
   u8 startChan = 0;
 
   packet[0] = 0x1D; 
@@ -235,28 +234,30 @@ static void frskyX_data_frame() {
   //10, 12, 14, 16, 18, 1A, 1C, 1E - failsafe packet
   //20 - range check packet
   packet[7] = FS_flag;
-  packet[8] = flag2;
+  packet[8] = 0;
 
   if ( lpass & 1 )
-    startChan += 8 ;
+      startChan += 8 ;
   
-  for(u8 i = 0; i < 12 ; i += 3) {
-    chan_0 = scaleForPXX(startChan);
-    if(lpass & 1 )
-      chan_0 += 2048;
-    
-    packet[9+i] = chan_0;
-    startChan++;
-    chan_1 = scaleForPXX(startChan);
-    if(lpass & 1 )
-      chan_1 += 2048;
-    
-    startChan++;
-    packet[9+i+1] = (((chan_0>>8) & 0x0F)|(chan_1 << 4));
-    packet[9+i+2] = chan_1>>4;
+  for(u8 i = 0; i < 12 ; i += 3) {    // 12 bytes of channel data
+      chan_0 = scaleForPXX(startChan);
+      if(lpass & 1 )
+          chan_0 += 2048;
+      
+      packet[9+i] = chan_0;
+      startChan++;
+      chan_1 = scaleForPXX(startChan);
+      if(lpass & 1 )
+          chan_1 += 2048;
+      
+      startChan++;
+      packet[9+i+1] = (((chan_0 >> 8) & 0x0F) | (chan_1 << 4));
+      packet[9+i+2] = chan_1 >> 4;
   }
 
-  packet[21] = 0x80;//??? when received first telemetry frame is changed to 0x80
+  packet[21] = seq_last_sent << 4 | seq_last_rcvd;
+  if (seq_last_sent < 8)
+      seq_last_sent = (seq_last_sent + 1) % 4;  // don't bump tx sequence until packets received
   
   lpass += 1;
   
@@ -328,6 +329,9 @@ void frsky_parse_sport_stream(u8 data) {
     static u8 sportRxBufferCount = 0;
     static u8 sportRxBuffer[FRSKY_SPORT_PACKET_SIZE];   // Receive buffer. 9 bytes (full packet)
 
+#ifdef EMULATOR
+    printf("telem datastate %d, data 0x%02x\n", dataState, data);
+#endif
     switch (dataState) {
     case STATE_DATA_START:
         if (data == START_STOP) {
@@ -368,7 +372,12 @@ void frsky_parse_sport_stream(u8 data) {
         break;
     } // switch
 
-    if (sportRxBufferCount >= FRSKY_SPORT_PACKET_SIZE) {
+    if (sportRxBufferCount >= FRSKY_SPORT_PACKET_SIZE - 1) {
+#ifdef EMULATOR
+printf("processing telem stream %02x", sportRxBuffer[0]);
+for(int i=1; i < sportRxBufferCount; i++) printf(" %02x", sportRxBuffer[i]);
+printf("\n");
+#endif
        // processSportPacket(sportRxBuffer);
         dataState = STATE_DATA_IDLE;
     }
@@ -379,7 +388,7 @@ void frsky_check_telemetry(u8 *pkt, u8 len) {
 //    u8 AD2gain = Model.proto_opts[PROTO_OPTS_AD2GAIN];
 
     // only packets with the required id and packet length
-    if (pkt[1] == (fixed_id & 0xff) && pkt[2] == (fixed_id >> 8) && len == pkt[0] + 3) {
+    if (pkt[1] == (fixed_id & 0xff) && pkt[2] == (fixed_id >> 8) && pkt[0] == len-1) {
         if (pkt[4] > 0x36) {   // 0x36 magic number? TODO
     //        rssi=pktt[4] / 2;
             Telemetry.value[TELEM_FRSKY_RSSI] = pkt[4] / 2; 	// Value in Db
@@ -389,14 +398,22 @@ void frsky_check_telemetry(u8 *pkt, u8 len) {
             Telemetry.value[TELEM_FRSKY_VOLT1] = pkt[4];      // In 1/100 of Volts
             TELEMETRY_SetUpdated(TELEM_FRSKY_VOLT1);
         }
+#ifdef EMULATOR
+//    printf("telem %02x", pkt[0]);
+//    for(int i=1; i < len; i++) printf(" %02x", pkt[i]);
+//    printf("\n");
+//    printf("seq_last_sent %02x, seq_last_rcvd 0x%02x\n", seq_last_sent, seq_last_rcvd);
+#endif
 
-        for (u8 i=0; i < pkt[6]; i++)
-            frsky_parse_sport_stream(pkt[7+i]);
+        seq_last_sent &= 0x03;  // packet received - clear flag in tx sequence
+        if ((pkt[5] >> 4 & 0x03) == (seq_last_rcvd + 1) % 4) {   // ignore stream data if sequence number wrong
+            seq_last_rcvd = (seq_last_rcvd + 1) % 4;
+            for (u8 i=0; i < pkt[6]; i++)
+                frsky_parse_sport_stream(pkt[7+i]);
+        }
     }
 }
 #if 0
-        if (pkt[5] & 0x03 == send_seq) send_seq = (send_seq+1) % 4; // doesn't really matter since no tx stream data
-        if ((pkt[5] >> 4) & 0x03 == (last_rcvd_seq+1) % 3) {
 
         u8 j=7;
         for (u8 i=0; i < packet[6]; i++) {
@@ -410,12 +427,25 @@ void frsky_check_telemetry(u8 *pkt, u8 len) {
         }
 #endif
 
+
+
+#ifdef EMULATOR
+static u8 telem_idx;
+static u8 telem_test[][15] = {
+{0x0E, 0xa5, 0x8b, 0x02, 0x2C, 0x03, 0x00, 0x00, 0x00, 0x00, 0x03, 0xF1, 0xD1, 0x00, 0x00},
+{0x0E, 0xa5, 0x8b, 0x02, 0x2C, 0x03, 0x00, 0x00, 0x00, 0x00, 0x03, 0xF1, 0xD1, 0x00, 0x00},
+{0x0E, 0xa5, 0x8b, 0x02, 0xD0, 0x10, 0x00, 0x00, 0x00, 0x00, 0x03, 0xF1, 0xD1, 0x00, 0x00},
+{0x0E, 0xa5, 0x8b, 0x02, 0x2C, 0x21, 0x06, 0x7E, 0x1A, 0x10, 0x03, 0xF1, 0xD0, 0x00, 0x00},
+{0x0E, 0xa5, 0x8b, 0x02, 0xCE, 0x32, 0x03, 0x00, 0x00, 0x00, 0x03, 0xF1, 0xD0, 0x00, 0x00},
+};
+#endif
+
   
 u16 frskyx_cb() {
   u8 len;
 
 #ifdef EMULATOR
-    printf("state %d, channr %d, counter_rst %d, ctr %d, chanskip %d\n", state, channr, counter_rst, ctr, chanskip);
+//    printf("state %d, channr %d, counter_rst %d, ctr %d, chanskip %d\n", state, channr, counter_rst, ctr, chanskip);
 #endif
   switch(state) { 
     default: 
@@ -469,11 +499,17 @@ u16 frskyx_cb() {
       return 30;
 #endif
     case FRSKY_DATA4:
+#ifndef EMULATOR
       len = CC2500_ReadReg(CC2500_3B_RXBYTES | CC2500_READ_BURST) & 0x7F; 
       if (len && len < PACKET_SIZE) {
           CC2500_ReadData(packet, len);
-//          frsky_check_telemetry(packet, len); //check if valid telemetry packets
+          frsky_check_telemetry(packet, len);
       }
+#else
+      memcpy(packet, &telem_test[telem_idx], sizeof(telem_test[0]));
+      telem_idx = (telem_idx + 1) % (sizeof(telem_test)/sizeof(telem_test[0]));
+      frsky_check_telemetry(packet, sizeof(telem_test[0]));
+#endif
       state = FRSKY_DATA1;
 #ifndef EMULATOR
       return 300;
@@ -586,6 +622,8 @@ static void initialize(int bind)
         PROTOCOL_SetBindState(0xFFFFFFFF);
         state = FRSKY_BIND;
         initialize_data(1);
+        seq_last_sent = 8;
+        seq_last_rcvd = 8;
     } else {
         state = FRSKY_DATA1;
         initialize_data(0);
