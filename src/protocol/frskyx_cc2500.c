@@ -70,7 +70,11 @@ static u8 seq_last_rcvd;
 //u8 ptr[4] = {0x00,0x11,0x22,0x33};
 static enum {
   FRSKY_BIND,
+#ifndef EMULATOR
   FRSKY_BIND_DONE = 1000,
+#else
+  FRSKY_BIND_DONE = 50,
+#endif
   FRSKY_DATA1,
   FRSKY_DATA2,
   FRSKY_DATA3,
@@ -201,14 +205,21 @@ static void frskyX_build_bind_packet()
 }
 
 
-static u16 scaleForPXX( u8 i )
+static u16 scaleForPXX(u8 chan)
 { //mapped 860,2140(125%) range to 64,1984(PXX values);
 //  return (u16)(((Servo_data[i]-PPM_MIN)*3)>>1)+64;
 // 0-2047, 0 = 817, 1024 = 1500, 2047 = 2182
-    if(i >= Model.num_channels)
-        return 814;
-    else
-        return Channels[i] * 936 / CHAN_MAX_VALUE + 814;
+    if(chan >= Model.num_channels)
+        return 1024;
+    
+    s32 chan_val = Channels[chan];
+    // set max deflection at 125%
+    if (chan_val > CHAN_MAX_VALUE + CHAN_MAX_VALUE / 4)
+        chan_val = CHAN_MAX_VALUE + CHAN_MAX_VALUE / 4;
+    else if (chan_val < CHAN_MIN_VALUE - CHAN_MIN_VALUE / 4)
+        chan_val = CHAN_MIN_VALUE - CHAN_MIN_VALUE / 4;
+
+    return chan_val * 819 / CHAN_MAX_VALUE + 1024;
 }
  
 static void frskyX_data_frame() {
@@ -255,9 +266,12 @@ static void frskyX_data_frame() {
       packet[9+i+2] = chan_1 >> 4;
   }
 
+  packet[21] = 0x80;
+#if 0
   packet[21] = seq_last_sent << 4 | seq_last_rcvd;
   if (seq_last_sent < 8)
       seq_last_sent = (seq_last_sent + 1) % 4;  // don't bump tx sequence until packets received
+#endif
   
   lpass += 1;
   
@@ -315,7 +329,63 @@ static void frskyX_data_frame() {
 #define START_STOP              0x7e
 #define BYTESTUFF               0x7d
 #define STUFF_MASK              0x20
-#define FRSKY_SPORT_PACKET_SIZE   9
+#define FRSKY_SPORT_PACKET_SIZE    8
+
+// FrSky PRIM IDs (1 byte)
+#define DATA_FRAME                0x10
+
+#define SPORT_DATA_U8(packet)   (packet[4])
+#define SPORT_DATA_S32(packet)  (*((int32_t *)(packet+4)))
+#define SPORT_DATA_U32(packet)  (*((uint32_t *)(packet+4)))
+#define HUB_DATA_U16(packet)    (*((uint16_t *)(packet+4)))
+
+void processSportPacket(u8 *packet) {
+//    u8  instance = (packet[0] & 0x1F) + 1;
+    u8  prim     =  packet[1];
+    u16 id       = *((u16 *)(packet+2));
+    u8 byte;
+
+    if (prim == DATA_FRAME)  {
+//        u32 data = SPORT_DATA_S32(packet);
+
+        if (id == RSSI_ID) {
+    //      frskyData.rssi.set(SPORT_DATA_U8(packet));
+        }
+        else if (id == XJT_VERSION_ID) {
+    //      frskyData.xjtVersion = HUB_DATA_U16(packet);
+        }
+        else if (id == SWR_ID) {
+    //      frskyData.swr.set(SPORT_DATA_U8(packet));
+        }
+
+// necessary?        if ({rssi > 0} > 0) {     /* because when Rx is OFF it happens that some old A1/A2 values are sent from the XJT module*/
+            if ((id >> 8) == 0) {
+                // The old FrSky IDs
+//                processHubPacket(id, HUB_DATA_U16(packet));
+                return;
+            }
+
+            u8 byte = SPORT_DATA_U8(packet);
+            switch(id) {
+            case ADC1_ID:
+                Telemetry.value[TELEM_FRSKY_VOLT2] = byte;      // In 1/100 of Volts
+                TELEMETRY_SetUpdated(TELEM_FRSKY_VOLT2);
+                break;
+            case ADC2_ID:
+                Telemetry.value[TELEM_FRSKY_VOLT3] = byte;      // In 1/100 of Volts
+                TELEMETRY_SetUpdated(TELEM_FRSKY_VOLT3);
+                break;
+            case BATT_ID:
+                Telemetry.value[TELEM_FRSKY_VOLTA] = byte;      // In 1/100 of Volts
+                TELEMETRY_SetUpdated(TELEM_FRSKY_VOLTA);
+                break;
+            case SWR_ID:
+                break;
+            }
+// necessary?        }
+    }
+}
+
 
 typedef enum {
     STATE_DATA_IDLE,
@@ -326,8 +396,8 @@ typedef enum {
 
 void frsky_parse_sport_stream(u8 data) {
     static SportStates dataState = STATE_DATA_IDLE;
-    static u8 sportRxBufferCount = 0;
-    static u8 sportRxBuffer[FRSKY_SPORT_PACKET_SIZE];   // Receive buffer. 9 bytes (full packet)
+    static u8 sportRxBufferCount;
+    static u8 sportRxBuffer[FRSKY_SPORT_PACKET_SIZE];   // Receive buffer. 8 bytes (full packet)
 
 #ifdef EMULATOR
     printf("telem datastate %d, data 0x%02x\n", dataState, data);
@@ -372,13 +442,13 @@ void frsky_parse_sport_stream(u8 data) {
         break;
     } // switch
 
-    if (sportRxBufferCount >= FRSKY_SPORT_PACKET_SIZE - 1) {
+    if (sportRxBufferCount >= FRSKY_SPORT_PACKET_SIZE) {
 #ifdef EMULATOR
 printf("processing telem stream %02x", sportRxBuffer[0]);
 for(int i=1; i < sportRxBufferCount; i++) printf(" %02x", sportRxBuffer[i]);
 printf("\n");
 #endif
-       // processSportPacket(sportRxBuffer);
+        processSportPacket(sportRxBuffer);
         dataState = STATE_DATA_IDLE;
     }
 }
@@ -413,19 +483,6 @@ void frsky_check_telemetry(u8 *pkt, u8 len) {
         }
     }
 }
-#if 0
-
-        u8 j=7;
-        for (u8 i=0; i < packet[6]; i++) {
-            if (packet[j++]==0x03)
-              if (packet[j]==0xF1) {
-    //              ADC2=packet[j+1];
-                  Telemetry.value[TELEM_FRSKY_VOLT2] = packet[j+1] * (132*AD2gain) / 1000; //In 1/100 of Volts *(A2gain/10) TODO
-                  TELEMETRY_SetUpdated(TELEM_FRSKY_VOLT2);
-                  break;
-              }
-        }
-#endif
 
 
 
@@ -499,11 +556,11 @@ u16 frskyx_cb() {
       return 30;
 #endif
     case FRSKY_DATA4:
-#ifndef EMULATOR
       len = CC2500_ReadReg(CC2500_3B_RXBYTES | CC2500_READ_BURST) & 0x7F; 
+#ifndef EMULATOR
       if (len && len < PACKET_SIZE) {
           CC2500_ReadData(packet, len);
-          frsky_check_telemetry(packet, len);
+//          frsky_check_telemetry(packet, len);
       }
 #else
       memcpy(packet, &telem_test[telem_idx], sizeof(telem_test[0]));
