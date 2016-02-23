@@ -216,8 +216,8 @@ static u16 scaleForPXX(u8 chan)
     // set max deflection at 125%
     if (chan_val > CHAN_MAX_VALUE + CHAN_MAX_VALUE / 4)
         chan_val = CHAN_MAX_VALUE + CHAN_MAX_VALUE / 4;
-    else if (chan_val < CHAN_MIN_VALUE - CHAN_MIN_VALUE / 4)
-        chan_val = CHAN_MIN_VALUE - CHAN_MIN_VALUE / 4;
+    else if (chan_val < CHAN_MIN_VALUE + CHAN_MIN_VALUE / 4)
+        chan_val = CHAN_MIN_VALUE + CHAN_MIN_VALUE / 4;
 
     return chan_val * 819 / CHAN_MAX_VALUE + 1024;
 }
@@ -565,7 +565,7 @@ u16 frskyx_cb() {
 #else
       memcpy(packet, &telem_test[telem_idx], sizeof(telem_test[0]));
       telem_idx = (telem_idx + 1) % (sizeof(telem_test)/sizeof(telem_test[0]));
-      frsky_check_telemetry(packet, sizeof(telem_test[0]));
+      //frsky_check_telemetry(packet, sizeof(telem_test[0]));
 #endif
       state = FRSKY_DATA1;
 #ifndef EMULATOR
