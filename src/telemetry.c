@@ -285,7 +285,7 @@ void TELEMETRY_SetTypeByProtocol(enum Protocols protocol)
 {
     if (protocol == PROTOCOL_DSM2 || protocol == PROTOCOL_DSMX)
         TELEMETRY_SetType(TELEM_DSM);
-    else if (protocol == PROTOCOL_FRSKY2WAY)
+    else if (protocol == PROTOCOL_FRSKY2WAY || protocol == PROTOCOL_FRSKYX)
         TELEMETRY_SetType(TELEM_FRSKY);
     else
         TELEMETRY_SetType(TELEM_DEVO);
