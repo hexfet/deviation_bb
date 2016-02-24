@@ -266,12 +266,13 @@ static void frskyX_data_frame() {
       packet[9+i+2] = chan_1 >> 4;
   }
 
-  packet[21] = 0x80;
-#if 0
-  packet[21] = seq_last_sent << 4 | seq_last_rcvd;
-  if (seq_last_sent < 8)
-      seq_last_sent = (seq_last_sent + 1) % 4;  // don't bump tx sequence until packets received
-#endif
+    if (Model.proto_opts[PROTO_OPTS_AD2GAIN] != 3) {
+        packet[21] = 0x80;
+    } else {
+        packet[21] = seq_last_sent << 4 | seq_last_rcvd;
+        if (seq_last_sent < 8)
+            seq_last_sent = (seq_last_sent + 1) % 4;  // don't bump tx sequence until packets received
+    }
   
   lpass += 1;
   
@@ -477,8 +478,8 @@ void frsky_check_telemetry(u8 *pkt, u8 len) {
         seq_last_sent &= 0x03;  // packet received - clear flag in tx sequence
         if ((pkt[5] >> 4 & 0x03) == (seq_last_rcvd + 1) % 4) {   // ignore stream data if sequence number wrong
             seq_last_rcvd = (seq_last_rcvd + 1) % 4;
-            for (u8 i=0; i < pkt[6]; i++)
-                frsky_parse_sport_stream(pkt[7+i]);
+//            for (u8 i=0; i < pkt[6]; i++)
+//                frsky_parse_sport_stream(pkt[7+i]);
         }
     }
 }
@@ -567,12 +568,12 @@ u16 frskyx_cb() {
 #ifndef EMULATOR
       if (len && len < PACKET_SIZE) {
           CC2500_ReadData(packet, len);
-//          frsky_check_telemetry(packet, len);
+          frsky_check_telemetry(packet, len);
       }
 #else
       memcpy(packet, &telem_test[telem_idx], sizeof(telem_test[0]));
       telem_idx = (telem_idx + 1) % (sizeof(telem_test)/sizeof(telem_test[0]));
-//      frsky_check_telemetry(packet, sizeof(telem_test[0]));
+      frsky_check_telemetry(packet, sizeof(telem_test[0]));
 #endif
       state = FRSKY_DATA1;
 #ifndef EMULATOR
