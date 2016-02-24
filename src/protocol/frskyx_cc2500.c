@@ -205,21 +205,21 @@ static void frskyX_build_bind_packet()
 }
 
 
+//#define STICK_SCALE    819  // full scale at +-125
+#define STICK_SCALE    751  // +/-100 gives 2000/1000 us pwm
 static u16 scaleForPXX(u8 chan)
 { //mapped 860,2140(125%) range to 64,1984(PXX values);
 //  return (u16)(((Servo_data[i]-PPM_MIN)*3)>>1)+64;
 // 0-2047, 0 = 817, 1024 = 1500, 2047 = 2182
-    if(chan >= Model.num_channels)
+    if (chan >= Model.num_channels)
         return 1024;
     
-    s32 chan_val = Channels[chan];
-    // set max deflection at 125%
-    if (chan_val > CHAN_MAX_VALUE + CHAN_MAX_VALUE / 4)
-        chan_val = CHAN_MAX_VALUE + CHAN_MAX_VALUE / 4;
-    else if (chan_val < CHAN_MIN_VALUE + CHAN_MIN_VALUE / 4)
-        chan_val = CHAN_MIN_VALUE + CHAN_MIN_VALUE / 4;
+    s32 chan_val = Channels[chan] * STICK_SCALE / CHAN_MAX_VALUE + 1024;
 
-    return chan_val * 819 / CHAN_MAX_VALUE + 1024;
+    if (chan_val > 2047)   chan_val = 2047;
+    else if (chan_val < 0) chan_val = 0;
+
+    return chan_val;
 }
  
 static void frskyX_data_frame() {
@@ -567,12 +567,12 @@ u16 frskyx_cb() {
 #ifndef EMULATOR
       if (len && len < PACKET_SIZE) {
           CC2500_ReadData(packet, len);
-          frsky_check_telemetry(packet, len);
+//          frsky_check_telemetry(packet, len);
       }
 #else
       memcpy(packet, &telem_test[telem_idx], sizeof(telem_test[0]));
       telem_idx = (telem_idx + 1) % (sizeof(telem_test)/sizeof(telem_test[0]));
-      frsky_check_telemetry(packet, sizeof(telem_test[0]));
+//      frsky_check_telemetry(packet, sizeof(telem_test[0]));
 #endif
       state = FRSKY_DATA1;
 #ifndef EMULATOR
