@@ -54,7 +54,6 @@ ctassert(LAST_PROTO_OPT <= NUM_PROTO_OPTS, too_many_protocol_opts);
 #define TELEM_ON  0
 #define TELEM_OFF 1
 
-#define PACKETSIZE 27
 #define PACKET_SIZE   30
 
 static u8 chanskip;
@@ -340,10 +339,24 @@ static void frskyX_data_frame() {
 #define SPORT_DATA_U32(packet)  (*((uint32_t *)(packet+4)))
 #define HUB_DATA_U16(packet)    (*((uint16_t *)(packet+4)))
 
+u8 checkSportPacket(u8 *packet)
+{
+    s16 crc = 0;
+    for (int i=1; i < FRSKY_SPORT_PACKET_SIZE; ++i) {
+        crc += packet[i]; // 0-1FE
+        crc += crc >> 8;  // 0-1FF
+        crc &= 0x00ff;    // 0-FF
+    }
+
+    return crc == 0x00ff;
+}
+
 void processSportPacket(u8 *packet) {
 //    u8  instance = (packet[0] & 0x1F) + 1;
-    u8  prim     =  packet[1];
+    u8  prim     = packet[1];
     u16 id       = *((u16 *)(packet+2));
+
+    if (!checkSportPacket) return;
 
     if (prim == DATA_FRAME)  {
 //        u32 data = SPORT_DATA_S32(packet);
