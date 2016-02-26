@@ -358,7 +358,14 @@ void processSportPacket(u8 *packet) {
     u8  prim     = packet[1];
     u16 id       = *((u16 *)(packet+2));
 
-    if (!checkSportPacket(packet)) return;
+
+//    if (!checkSportPacket(packet)) return;
+
+#ifdef EMULATOR
+printf("processing sport packet %02x", packet[0]);
+for(int i=1; i < 9; i++) printf(" %02x", packet[i]);
+printf("\n");
+#endif
 
     if (prim == DATA_FRAME)  {
 //        u32 data = SPORT_DATA_S32(packet);
@@ -415,7 +422,7 @@ void frsky_parse_sport_stream(u8 data) {
     static u8 sportRxBuffer[FRSKY_SPORT_PACKET_SIZE];   // Receive buffer. 8 bytes (full packet)
 
 #ifdef EMULATOR
-    printf("telem datastate %d, data 0x%02x\n", dataState, data);
+//    printf("telem datastate %d, data 0x%02x\n", dataState, data);
 #endif
     switch (dataState) {
     case STATE_DATA_START:
