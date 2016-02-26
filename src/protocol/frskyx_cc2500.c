@@ -266,7 +266,7 @@ static void frskyX_data_frame() {
     }
 
     if (Model.proto_opts[PROTO_OPTS_AD2GAIN] != 3) {
-        packet[21] = 0x80;
+        packet[21] = 0x08;
     } else {
         packet[21] = seq_last_sent << 4 | seq_last_rcvd;
         if (seq_last_sent < 0x08)
@@ -496,8 +496,8 @@ void frsky_check_telemetry(u8 *pkt, u8 len) {
         } else {
             if ((pkt[5] >> 4 & 0x03) == (seq_last_rcvd + 1) % 4) {   // ignore stream data if sequence number wrong
                 seq_last_rcvd = (seq_last_rcvd + 1) % 4;
-    //            for (u8 i=0; i < pkt[6]; i++)
-    //                frsky_parse_sport_stream(pkt[7+i]);
+                for (u8 i=0; i < pkt[6]; i++)
+                    frsky_parse_sport_stream(pkt[7+i]);
             }
         }
     }
@@ -552,6 +552,7 @@ u16 frskyx_cb() {
       return 90;
 #endif
     case FRSKY_BIND_DONE:
+      PROTOCOL_SetBindState(0);
       initialize_data(0);
       channr = 0;
       state++;      
@@ -713,7 +714,6 @@ static void initialize(int bind)
         state = FRSKY_BIND;
         initialize_data(1);
     } else {
-        PROTOCOL_SetBindState(0);
         state = FRSKY_DATA1;
         initialize_data(0);
     }
