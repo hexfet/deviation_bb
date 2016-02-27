@@ -329,12 +329,21 @@ static void frskyX_data_frame() {
 #define SPORT_DATA_U32(packet)  (*((uint32_t *)(packet+4)))
 #define HUB_DATA_U16(packet)    (*((uint16_t *)(packet+4)))
 
+void debugTelem(u8 value) {
+  static u8 max_value = 0;
+  if (value > max_value) {
+    max_value = value;
+    Telemetry.value[TELEM_FRSKY_RPM] = value;
+  }
+  TELEMETRY_SetUpdated(TELEM_FRSKY_RPM);
+}
 
 void processSportPacket(u8 *packet) {
 //    u8  instance = (packet[0] & 0x1F) + 1;
     u8  prim     = packet[1];
     u16 id       = *((u16 *)(packet+2));
 
+debugTelem(4);
 
 #ifdef EMULATOR
 //printf("processing sport packet %02x", packet[0]);
@@ -346,6 +355,7 @@ printf("prim 0x%02x, id 0x%02x\n", prim, id);
     if (prim == DATA_FRAME)  {
 //        u32 data = SPORT_DATA_S32(packet);
 
+debugTelem(5);
         u8 byte = SPORT_DATA_U8(packet);
         if (id == RSSI_ID) {
             Telemetry.value[TELEM_FRSKY_TEMP1] = byte;
@@ -399,6 +409,7 @@ void frsky_parse_sport_stream(u8 data) {
     static u8 sportRxBufferCount;
     static u8 sportRxBuffer[FRSKY_SPORT_PACKET_SIZE];   // Receive buffer. 8 bytes (full packet)
 
+debugTelem(3);
     switch (dataState) {
     case STATE_DATA_START:
         if (data == START_STOP) {
@@ -448,7 +459,7 @@ void frsky_parse_sport_stream(u8 data) {
 
 void frsky_check_telemetry(u8 *pkt, u8 len) {
 //    u8 AD2gain = Model.proto_opts[PROTO_OPTS_AD2GAIN];
-
+debugTelem(1);
     // only packets with the required id and packet length
     if (pkt[1] == (fixed_id & 0xff) && pkt[2] == (fixed_id >> 8) && pkt[0] == len-3) {
         if (pkt[4] > 0x36) {   // 0x36 magic number? TODO
@@ -472,11 +483,13 @@ void frsky_check_telemetry(u8 *pkt, u8 len) {
             seq_last_rcvd = 0x00;
         } else {
             if ((pkt[5] >> 4 & 0x03) == (seq_last_rcvd + 1) % 4) {   // ignore stream data if sequence number wrong
+debugTelem(2);
                 seq_last_rcvd = (seq_last_rcvd + 1) % 4;
-                for (u8 i=0; i < pkt[6]; i++)
-                    frsky_parse_sport_stream(pkt[7+i]);
             }
         }
+
+        for (u8 i=0; i < pkt[6]; i++)
+            frsky_parse_sport_stream(pkt[7+i]);
     }
 }
 
