@@ -134,13 +134,7 @@ static const u16 CRCTable[] = {
 };
 
 
-/*
-static u8 crc_Byte( u8 byte )
-{
-  crc = (crc<<8) ^ CRCTable[((u8)(crc>>8) ^ byte) & 0xFF];
-  return byte;
-}
-*/
+
 static u16 crc(u8 *data, u8 len) {
   u16 crc = 0;
   for(int i=0; i < len; i++)
@@ -168,33 +162,27 @@ static void set_start(u8 ch) {
 #define RXNUM 16
 static void frskyX_build_bind_packet()
 {
-  packet[0] = 0x1D;       
-  packet[1] = 0x03;          
-  packet[2] = 0x01;               
+    packet[0] = 0x1D;       
+    packet[1] = 0x03;          
+    packet[2] = 0x01;               
 
-//    packet[3] = crc_Byte(rx_tx_addr[3]);
-//    packet[4] = crc_Byte(rx_tx_addr[2]);
-  packet[3] = fixed_id;
-  packet[4] = fixed_id >> 8;
-  int idx = ((state - FRSKY_BIND) % 10) * 5;
-  packet[5] = idx;  
-  packet[6] = hop_data[idx++];
-  packet[7] = hop_data[idx++];
-  packet[8] = hop_data[idx++];
-  packet[9] = hop_data[idx++];
-  packet[10] = hop_data[idx++];
-  packet[11] = 0x02;
-  packet[12] = RXNUM;
+    packet[3] = fixed_id;
+    packet[4] = fixed_id >> 8;
+    int idx = ((state - FRSKY_BIND) % 10) * 5;
+    packet[5] = idx;  
+    packet[6] = hop_data[idx++];
+    packet[7] = hop_data[idx++];
+    packet[8] = hop_data[idx++];
+    packet[9] = hop_data[idx++];
+    packet[10] = hop_data[idx++];
+    packet[11] = 0x02;
+    packet[12] = RXNUM;
 
-  memset(&packet[13], 0, 15);
-//  for(u8 i = 13;i<28;i++)
-//    packet[i] = crc_Byte(0);
+    memset(&packet[13], 0, 15);
 
-//  packet[28] = crc >> 8;
-//  packet[29] = crc;
-  u16 lcrc = crc(&packet[3], 25);
-  packet[28] = lcrc >> 8;
-  packet[29] = lcrc;
+    u16 lcrc = crc(&packet[3], 25);
+    packet[28] = lcrc >> 8;
+    packet[29] = lcrc;
 #ifdef EMULATOR
     printf("packet %02x", packet[0]);
     for(int i=1; i < PACKET_SIZE; i++) printf(" %02x", packet[i]);
@@ -341,17 +329,6 @@ static void frskyX_data_frame() {
 #define SPORT_DATA_U32(packet)  (*((uint32_t *)(packet+4)))
 #define HUB_DATA_U16(packet)    (*((uint16_t *)(packet+4)))
 
-u8 checkSportPacket(u8 *packet)
-{
-    s16 crc = 0;
-    for (int i=1; i < FRSKY_SPORT_PACKET_SIZE; ++i) {
-        crc += packet[i]; // 0-1FE
-        crc += crc >> 8;  // 0-1FF
-        crc &= 0x00ff;    // 0-FF
-    }
-
-    return crc == 0x00ff;
-}
 
 void processSportPacket(u8 *packet) {
 //    u8  instance = (packet[0] & 0x1F) + 1;
@@ -359,18 +336,20 @@ void processSportPacket(u8 *packet) {
     u16 id       = *((u16 *)(packet+2));
 
 
-//    if (!checkSportPacket(packet)) return;
-
 #ifdef EMULATOR
-printf("processing sport packet %02x", packet[0]);
-for(int i=1; i < 9; i++) printf(" %02x", packet[i]);
-printf("\n");
+//printf("processing sport packet %02x", packet[0]);
+//for(int i=1; i < FRSKY_SPORT_PACKET_SIZE; i++) printf(" %02x", packet[i]);
+//printf("\n");
+printf("prim 0x%02x, id 0x%02x\n", prim, id);
 #endif
 
     if (prim == DATA_FRAME)  {
 //        u32 data = SPORT_DATA_S32(packet);
 
+        u8 byte = SPORT_DATA_U8(packet);
         if (id == RSSI_ID) {
+            Telemetry.value[TELEM_FRSKY_TEMP1] = byte;
+            TELEMETRY_SetUpdated(TELEM_FRSKY_TEMP1);
     //      frskyData.rssi.set(SPORT_DATA_U8(packet));
         }
         else if (id == XJT_VERSION_ID) {
@@ -387,7 +366,6 @@ printf("\n");
                 return;
             }
 
-            u8 byte = SPORT_DATA_U8(packet);
             switch(id) {
             case ADC1_ID:
                 Telemetry.value[TELEM_FRSKY_VOLT2] = byte;      // In 1/100 of Volts
@@ -421,9 +399,6 @@ void frsky_parse_sport_stream(u8 data) {
     static u8 sportRxBufferCount;
     static u8 sportRxBuffer[FRSKY_SPORT_PACKET_SIZE];   // Receive buffer. 8 bytes (full packet)
 
-#ifdef EMULATOR
-//    printf("telem datastate %d, data 0x%02x\n", dataState, data);
-#endif
     switch (dataState) {
     case STATE_DATA_START:
         if (data == START_STOP) {
@@ -465,11 +440,6 @@ void frsky_parse_sport_stream(u8 data) {
     } // switch
 
     if (sportRxBufferCount >= FRSKY_SPORT_PACKET_SIZE) {
-#ifdef EMULATOR
-printf("processing telem stream %02x", sportRxBuffer[0]);
-for(int i=1; i < sportRxBufferCount; i++) printf(" %02x", sportRxBuffer[i]);
-printf("\n");
-#endif
         processSportPacket(sportRxBuffer);
         dataState = STATE_DATA_IDLE;
     }
@@ -487,13 +457,13 @@ void frsky_check_telemetry(u8 *pkt, u8 len) {
             TELEMETRY_SetUpdated(TELEM_FRSKY_RSSI);
         } else {
     //        RxBt=pktt[4];         
-            Telemetry.value[TELEM_FRSKY_VOLT1] = pkt[4];      // In 1/100 of Volts
+            Telemetry.value[TELEM_FRSKY_VOLT1] = pkt[4] * 10;      // In 1/100 of Volts
             TELEMETRY_SetUpdated(TELEM_FRSKY_VOLT1);
         }
 #ifdef EMULATOR
-    printf("telem %02x", pkt[0]);
-    for(int i=1; i < len; i++) printf(" %02x", pkt[i]);
-    printf("\n");
+//    printf("telem %02x", pkt[0]);
+//    for(int i=1; i < len; i++) printf(" %02x", pkt[i]);
+//    printf("\n");
     printf("seq_last_sent %02x, seq_last_rcvd 0x%02x\n", seq_last_sent, seq_last_rcvd);
 #endif
 
