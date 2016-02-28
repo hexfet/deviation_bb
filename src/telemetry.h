@@ -205,6 +205,9 @@ enum {
 /************************************************************************/
 /*  SPort telemetry                                                     */
 /************************************************************************/
+#define VARIO_FIRST_ID            0x0110
+#define VARIO_LAST_ID             0x011f
+
 #define RSSI_ID                   0xf101
 #define ADC1_ID                   0xf102
 #define ADC2_ID                   0xf103
