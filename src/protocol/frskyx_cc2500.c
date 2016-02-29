@@ -198,10 +198,10 @@ static u16 scaleForPXX(u8 chan, u8 failsafe)
 { //mapped 860,2140(125%) range to 64,1984(PXX values);
 //  return (u16)(((Servo_data[i]-PPM_MIN)*3)>>1)+64;
 // 0-2047, 0 = 817, 1024 = 1500, 2047 = 2182
-    s32 chan_val = 1024;
+    s32 chan_val;
 
     if (chan >= Model.num_channels)
-        return chan_val;
+        return (chan < 8) : 1024 : 3072;   // center values
 
     if (failsafe)
         chan_val = Model.limits[chan].failsafe * CHAN_MULTIPLIER;
@@ -219,12 +219,10 @@ static u16 scaleForPXX(u8 chan, u8 failsafe)
 }
  
 #ifdef EMULATOR
-#define FAILSAFE_TIMEOUT 64   // 1024;
+#define FAILSAFE_TIMEOUT 64
 #else
-#define FAILSAFE_TIMEOUT 1032;
+#define FAILSAFE_TIMEOUT 1032
 #endif
-
-
 
 static void frskyX_data_frame() {
     //0x1D 0xB3 0xFD 0x02 0x56 0x07 0x15 0x00 0x00 0x00 0x04 0x40 0x00 0x04 0x40 0x00 0x04 0x40 0x00 0x04 0x40 0x08 0x00 0x00 0x00 0x00 0x00 0x00 0x96 0x12
