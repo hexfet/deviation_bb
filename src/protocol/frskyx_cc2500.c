@@ -235,6 +235,7 @@ static void frskyX_data_frame() {
     static u8 FS_flag;
     static u8 failsafe_chan;
     u8 startChan = 0;
+    u8 channel;
 
     // data frames sent every 9ms; failsafe every 9 seconds
     if (failsafe_count > FAILSAFE_TIMEOUT && FS_flag == 0 && chan_offset == 0) {
@@ -262,41 +263,42 @@ static void frskyX_data_frame() {
     //  FLAGS 00 - standard packet
     //10, 12, 14, 16, 18, 1A, 1C, 1E - failsafe packet
     //20 - range check packet
-    packet[7] = FS_flag;
     packet[8] = 0;
 
     startChan = chan_offset;
 
     for(u8 i = 0; i < 12 ; i += 3) {    // 12 bytes of channel data
         if (FS_flag & 0x10
-//        && ((failsafe_chan < 8 ? (failsafe_chan + chan_offset) : (failsafe_chan - 8 + chan_offset)) == startChan)
-        && (((failsafe_chan & 0x7) ^ chan_offset) == startChan)
+        && (((failsafe_chan & 0x7) | chan_offset) == startChan)
         && (Model.limits[failsafe_chan].flags & CH_FAILSAFE_EN)) {
-            chan_0 = scaleForPXX(failsafe_chan, 1);
-            if( failsafe_chan > 7 )
-                chan_0 += 2048;
+            channel = failsafe_chan;
+            packet[7] = FS_flag;
         } else {
-            chan_0 = scaleForPXX(startChan, 0);
-            if (chan_offset)
-                chan_0 += 2048;
+            channel = startChan;
+            packet[7] = 0;  // no failsafe to set
         }
+
+        chan_0 = scaleForPXX(channel, packet[7] & 0x10);
+        if (channel > 7)
+            chan_0 += 2048;
         
         packet[9+i] = chan_0;
         startChan++;
 
         if (FS_flag & 0x10
-//        && ((failsafe_chan < 8 ? (failsafe_chan + chan_offset) : (failsafe_chan - 8 + chan_offset)) == startChan)
-        && (((failsafe_chan & 0x7) ^ chan_offset) == startChan)
+        && (((failsafe_chan & 0x7) | chan_offset) == startChan)
         && (Model.limits[failsafe_chan].flags & CH_FAILSAFE_EN)) {
-            chan_1 = scaleForPXX(failsafe_chan, 1);
-            if( failsafe_chan > 7 )
-                chan_1 += 2048;
+            channel = failsafe_chan;
+            packet[7] = FS_flag;
         } else {
-            chan_1 = scaleForPXX(startChan, 0);
-            if(chan_offset)
-                chan_1 += 2048;
+            channel = startChan;
+            packet[7] = 0;  // no failsafe to set
         }
-        
+
+        chan_1 = scaleForPXX(channel, packet[7] & 0x10);
+        if (channel > 7)
+            chan_1 += 2048;
+
         packet[9+i+1] = (((chan_0 >> 8) & 0x0F) | (chan_1 << 4));
         packet[9+i+2] = chan_1 >> 4;
         startChan++;
