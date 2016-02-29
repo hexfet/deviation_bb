@@ -54,7 +54,7 @@ ctassert(LAST_PROTO_OPT <= NUM_PROTO_OPTS, too_many_protocol_opts);
 #define TELEM_ON  0
 #define TELEM_OFF 1
 
-#define PACKET_SIZE   30
+#define PACKET_SIZE 30
 
 static u8 chanskip;
 static u8 calData[48][3];
@@ -194,14 +194,21 @@ static void frskyX_build_bind_packet()
 
 //#define STICK_SCALE    819  // full scale at +-125
 #define STICK_SCALE    751  // +/-100 gives 2000/1000 us pwm
-static u16 scaleForPXX(u8 chan)
+static u16 scaleForPXX(u8 chan, u8 failsafe)
 { //mapped 860,2140(125%) range to 64,1984(PXX values);
 //  return (u16)(((Servo_data[i]-PPM_MIN)*3)>>1)+64;
 // 0-2047, 0 = 817, 1024 = 1500, 2047 = 2182
+    s32 chan_val = 1024;
+
     if (chan >= Model.num_channels)
-        return 1024;
+        return chan_val;
+
+    if (failsafe)
+        chan_val = Model.limits[chan].failsafe * CHAN_MULTIPLIER;
+    else
+        chan_val = Channels[chan];
     
-    s32 chan_val = Channels[chan] * STICK_SCALE / CHAN_MAX_VALUE + 1024;
+    chan_val = chan_val * STICK_SCALE / CHAN_MAX_VALUE + 1024;
 
     if (chan_val > 2047)   chan_val = 2047;
     else if (chan_val < 0) chan_val = 0;
@@ -209,15 +216,39 @@ static u16 scaleForPXX(u8 chan)
     return chan_val;
 }
  
+#ifdef EMULATOR
+#define FAILSAFE_TIMEOUT 64   // 1024;
+#else
+#define FAILSAFE_TIMEOUT 1032;
+#endif
+
+
+
 static void frskyX_data_frame() {
     //0x1D 0xB3 0xFD 0x02 0x56 0x07 0x15 0x00 0x00 0x00 0x04 0x40 0x00 0x04 0x40 0x00 0x04 0x40 0x00 0x04 0x40 0x08 0x00 0x00 0x00 0x00 0x00 0x00 0x96 0x12
     // channel packing: H (0)7-4, L (0)3-0; H (1)3-0, L (0)11-8; H (1)11-8, L (1)7-4 etc
 
-    static u8 lpass;
-    u16 chan_0 ;
-    u16 chan_1 ; 
-    u8 FS_flag = 0;
+    u16 chan_0;
+    u16 chan_1; 
+    static u16 failsafe_count;
+    static u8 chan_offset;
+    static u8 FS_flag;
+    static u8 failsafe_chan;
     u8 startChan = 0;
+
+    // data frames sent every 9ms; failsafe every 9 seconds
+    if (failsafe_count > FAILSAFE_TIMEOUT && FS_flag == 0 && chan_offset == 0) {
+        FS_flag = 0x10;
+        failsafe_chan = 0;
+    } else if (failsafe_count > FAILSAFE_TIMEOUT + 16) {
+        FS_flag = 0;
+        failsafe_count = 0;
+    } else if (failsafe_count > FAILSAFE_TIMEOUT && (FS_flag & 0x10)) {
+        FS_flag = 0x10 | ((FS_flag + 2) & 0x0f);
+        failsafe_chan += 1;
+    }
+    failsafe_count += 1;
+
 
     packet[0] = 0x1D; 
     packet[1] = fixed_id;
@@ -234,23 +265,39 @@ static void frskyX_data_frame() {
     packet[7] = FS_flag;
     packet[8] = 0;
 
-    if ( lpass & 1 )
-        startChan += 8 ;
-    
+    startChan = chan_offset;
+
     for(u8 i = 0; i < 12 ; i += 3) {    // 12 bytes of channel data
-        chan_0 = scaleForPXX(startChan);
-        if(lpass & 1 )
-            chan_0 += 2048;
+        if (FS_flag & 0x10
+        && ((failsafe_chan < 8 ? (failsafe_chan + chan_offset) : (failsafe_chan - 8 + chan_offset)) == startChan)
+        && (Model.limits[failsafe_chan].flags & CH_FAILSAFE_EN)) {
+            chan_0 = scaleForPXX(failsafe_chan, 1);
+            if( failsafe_chan > 7 )
+                chan_0 += 2048;
+        } else {
+            chan_0 = scaleForPXX(startChan, 0);
+            if (chan_offset)
+                chan_0 += 2048;
+        }
         
         packet[9+i] = chan_0;
         startChan++;
-        chan_1 = scaleForPXX(startChan);
-        if(lpass & 1 )
-            chan_1 += 2048;
+
+        if (FS_flag & 0x10
+        && ((failsafe_chan < 8 ? (failsafe_chan + chan_offset) : (failsafe_chan - 8 + chan_offset)) == startChan)
+        && (Model.limits[failsafe_chan].flags & CH_FAILSAFE_EN)) {
+            chan_1 = scaleForPXX(failsafe_chan, 1);
+            if( failsafe_chan > 7 )
+                chan_1 += 2048;
+        } else {
+            chan_1 = scaleForPXX(startChan, 0);
+            if(chan_offset)
+                chan_1 += 2048;
+        }
         
-        startChan++;
         packet[9+i+1] = (((chan_0 >> 8) & 0x0F) | (chan_1 << 4));
         packet[9+i+2] = chan_1 >> 4;
+        startChan++;
     }
 
     if (Model.proto_opts[PROTO_OPTS_AD2GAIN] != 3) {
@@ -263,7 +310,7 @@ static void frskyX_data_frame() {
             seq_last_sent = 1;
     }
     
-    lpass += 1;
+    chan_offset ^= 0x08;
     
     for (u8 i = 22;i<28;i++)
       packet[i] = 0;
@@ -348,7 +395,7 @@ void processSportPacket(u8 *packet) {
 //printf("processing sport packet %02x", packet[0]);
 //for(int i=1; i < FRSKY_SPORT_PACKET_SIZE; i++) printf(" %02x", packet[i]);
 //printf("\n");
-printf("prim 0x%02x, id 0x%02x\n", prim, id);
+//printf("prim 0x%02x, id 0x%02x\n", prim, id);
 #endif
 
     if (prim == DATA_FRAME)  {
@@ -479,7 +526,7 @@ void frsky_check_telemetry(u8 *pkt, u8 len) {
 //    printf("telem %02x", pkt[0]);
 //    for(int i=1; i < len; i++) printf(" %02x", pkt[i]);
 //    printf("\n");
-    printf("seq_last_sent %02x, seq_last_rcvd 0x%02x\n", seq_last_sent, seq_last_rcvd);
+//    printf("seq_last_sent %02x, seq_last_rcvd 0x%02x\n", seq_last_sent, seq_last_rcvd);
 #endif
 
         if ((pkt[5] >> 4 & 0x0f) == 0x08) {   // restart or somesuch
