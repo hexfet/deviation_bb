@@ -213,6 +213,8 @@ static u16 scaleForPXX(u8 chan, u8 failsafe)
     if (chan_val > 2047)   chan_val = 2047;
     else if (chan_val < 0) chan_val = 0;
 
+    if (chan > 7) chan_val += 2048;   // upper channels offset
+
     return chan_val;
 }
  
@@ -235,18 +237,18 @@ static void frskyX_data_frame() {
     static u8 FS_flag;
     static u8 failsafe_chan;
     u8 startChan = 0;
-    u8 channel;
+
 
     // data frames sent every 9ms; failsafe every 9 seconds
     if (failsafe_count > FAILSAFE_TIMEOUT && FS_flag == 0 && chan_offset == 0) {
         FS_flag = 0x10;
         failsafe_chan = 0;
-    } else if (failsafe_count > FAILSAFE_TIMEOUT + 16) {
-        FS_flag = 0;
-        failsafe_count = 0;
-    } else if (failsafe_count > FAILSAFE_TIMEOUT && (FS_flag & 0x10)) {
+    } else if (FS_flag & 0x10 && failsafe_chan < (Model.num_channels-1)) {
         FS_flag = 0x10 | ((FS_flag + 2) & 0x0f);
         failsafe_chan += 1;
+    } else if (FS_flag & 0x10) {
+        FS_flag = 0;
+        failsafe_count = 0;
     }
     failsafe_count += 1;
 
@@ -263,6 +265,7 @@ static void frskyX_data_frame() {
     //  FLAGS 00 - standard packet
     //10, 12, 14, 16, 18, 1A, 1C, 1E - failsafe packet
     //20 - range check packet
+    packet[7] = 0;    // may be replaced by failsafe below
     packet[8] = 0;
 
     startChan = chan_offset;
@@ -271,48 +274,33 @@ static void frskyX_data_frame() {
         if (FS_flag & 0x10
         && (((failsafe_chan & 0x7) | chan_offset) == startChan)
         && (Model.limits[failsafe_chan].flags & CH_FAILSAFE_EN)) {
-            channel = failsafe_chan;
             packet[7] = FS_flag;
+            chan_0 = scaleForPXX(failsafe_chan, 1);
         } else {
-            channel = startChan;
-            packet[7] = 0;  // no failsafe to set
+            chan_0 = scaleForPXX(startChan, 0);
         }
-
-        chan_0 = scaleForPXX(channel, packet[7] & 0x10);
-        if (channel > 7)
-            chan_0 += 2048;
-        
-        packet[9+i] = chan_0;
         startChan++;
 
         if (FS_flag & 0x10
         && (((failsafe_chan & 0x7) | chan_offset) == startChan)
         && (Model.limits[failsafe_chan].flags & CH_FAILSAFE_EN)) {
-            channel = failsafe_chan;
             packet[7] = FS_flag;
+            chan_1 = scaleForPXX(failsafe_chan, 1);
         } else {
-            channel = startChan;
-            packet[7] = 0;  // no failsafe to set
+            chan_1 = scaleForPXX(startChan, 0);
         }
+        startChan++;
 
-        chan_1 = scaleForPXX(channel, packet[7] & 0x10);
-        if (channel > 7)
-            chan_1 += 2048;
-
+        packet[9+i]   = chan_0;
         packet[9+i+1] = (((chan_0 >> 8) & 0x0F) | (chan_1 << 4));
         packet[9+i+2] = chan_1 >> 4;
-        startChan++;
     }
 
-    if (Model.proto_opts[PROTO_OPTS_AD2GAIN] != 3) {
-        packet[21] = 0x08;
-    } else {
-        packet[21] = seq_last_sent << 4 | seq_last_rcvd;
-        if (seq_last_sent < 0x08)
-            seq_last_sent = (seq_last_sent + 1) % 4;
-        else if (seq_last_rcvd == 0x00)
-            seq_last_sent = 1;
-    }
+    packet[21] = seq_last_sent << 4 | seq_last_rcvd;
+    if (seq_last_sent < 0x08)
+        seq_last_sent = (seq_last_sent + 1) % 4;
+    else if (seq_last_rcvd == 0x00)
+        seq_last_sent = 1;
     
     chan_offset ^= 0x08;
     
