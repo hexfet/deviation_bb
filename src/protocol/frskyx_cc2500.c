@@ -269,7 +269,8 @@ static void frskyX_data_frame() {
 
     for(u8 i = 0; i < 12 ; i += 3) {    // 12 bytes of channel data
         if (FS_flag & 0x10
-        && ((failsafe_chan < 8 ? (failsafe_chan + chan_offset) : (failsafe_chan - 8 + chan_offset)) == startChan)
+//        && ((failsafe_chan < 8 ? (failsafe_chan + chan_offset) : (failsafe_chan - 8 + chan_offset)) == startChan)
+        && (((failsafe_chan & 0x7) ^ chan_offset) == startChan)
         && (Model.limits[failsafe_chan].flags & CH_FAILSAFE_EN)) {
             chan_0 = scaleForPXX(failsafe_chan, 1);
             if( failsafe_chan > 7 )
@@ -284,7 +285,8 @@ static void frskyX_data_frame() {
         startChan++;
 
         if (FS_flag & 0x10
-        && ((failsafe_chan < 8 ? (failsafe_chan + chan_offset) : (failsafe_chan - 8 + chan_offset)) == startChan)
+//        && ((failsafe_chan < 8 ? (failsafe_chan + chan_offset) : (failsafe_chan - 8 + chan_offset)) == startChan)
+        && (((failsafe_chan & 0x7) ^ chan_offset) == startChan)
         && (Model.limits[failsafe_chan].flags & CH_FAILSAFE_EN)) {
             chan_1 = scaleForPXX(failsafe_chan, 1);
             if( failsafe_chan > 7 )
