@@ -520,8 +520,8 @@ void frsky_check_telemetry(u8 *pkt, u8 len) {
 #endif
 
         if ((pkt[5] >> 4 & 0x0f) == 0x08) {   // restart or somesuch
-            seq_last_sent = 0;
-            seq_last_rcvd = 8;
+            seq_last_sent = 8;
+            seq_last_rcvd = 0;
         } else {
             if ((pkt[5] >> 4 & 0x03) == (seq_last_rcvd + 1) % 4) {   // ignore stream data if sequence number wrong
                 seq_last_rcvd = (seq_last_rcvd + 1) % 4;
