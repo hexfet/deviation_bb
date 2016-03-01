@@ -295,9 +295,9 @@ static void frskyX_data_frame() {
     }
 
     packet[21] = seq_last_sent << 4 | seq_last_rcvd;
-    if (seq_last_sent < 0x08)
+    if (seq_last_sent < 8 && seq_last_rcvd < 8)
         seq_last_sent = (seq_last_sent + 1) % 4;
-    else if (seq_last_rcvd == 0x00)
+    else if (seq_last_rcvd == 0)
         seq_last_sent = 1;
     
     chan_offset ^= 0x08;
@@ -520,8 +520,8 @@ void frsky_check_telemetry(u8 *pkt, u8 len) {
 #endif
 
         if ((pkt[5] >> 4 & 0x0f) == 0x08) {   // restart or somesuch
-            seq_last_sent = 0x08;
-            seq_last_rcvd = 0x00;
+            seq_last_sent = 0;
+            seq_last_rcvd = 8;
         } else {
             if ((pkt[5] >> 4 & 0x03) == (seq_last_rcvd + 1) % 4) {   // ignore stream data if sequence number wrong
                 seq_last_rcvd = (seq_last_rcvd + 1) % 4;
@@ -625,6 +625,10 @@ u16 frskyx_cb() {
       if (len && len < PACKET_SIZE) {
           CC2500_ReadData(packet, len);
           frsky_check_telemetry(packet, len);
+      } else {
+          // restart sequence on missed packet - might need count or timeout instead of one missed
+          seq_last_sent = 0;
+          seq_last_rcvd = 8;
       }
 #else
       memcpy(packet, &telem_test[telem_idx], sizeof(telem_test[0]));
