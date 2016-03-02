@@ -41,18 +41,21 @@ static const char * const frskyx_opts[] = {
   _tr_noop("Freq-Fine"),  "-127", "127", NULL,
   _tr_noop("Freq-Coarse"),  "-127", "127", NULL,
   _tr_noop("AD2GAIN"),  "1", "255", NULL,
+  _tr_noop("Failsafe"), "Hold", "NoPulse", "RX", NULL,
   NULL
 };
 enum {
     PROTO_OPTS_FREQFINE,
     PROTO_OPTS_FREQCOARSE,
     PROTO_OPTS_AD2GAIN,
+    PROTO_OPTS_FAILSAFE,
     LAST_PROTO_OPT,
 };
 ctassert(LAST_PROTO_OPT <= NUM_PROTO_OPTS, too_many_protocol_opts);
 
-#define TELEM_ON  0
-#define TELEM_OFF 1
+#define FAILSAFE_HOLD    0
+#define FAILSAFE_NOPULSE 1
+#define FAILSAFE_RX      2
 
 #define PACKET_SIZE 30
 
@@ -203,19 +206,23 @@ static u16 scaleForPXX(u8 chan, u8 failsafe)
     if (chan >= Model.num_channels) {
         if (chan > 7 && !failsafe)
             return scaleForPXX(chan-8, 0);
-
         return (chan < 8) ? 1024 : 3072;   // center values
     }
 
     if (failsafe)
-        chan_val = Model.limits[chan].failsafe * CHAN_MULTIPLIER;
+        if (Model.limits[chan].flags & CH_FAILSAFE_EN)
+            chan_val = Model.limits[chan].failsafe * CHAN_MULTIPLIER;
+        else if (Model.proto_opts[PROTO_OPTS_FAILSAFE] == FAILSAFE_HOLD)
+            return (chan < 8) ? 2046 : 4095;    // Hold
+        else
+            return (chan < 8) ? 0 : 2048;       // No Pulses
     else
         chan_val = Channels[chan];
     
     chan_val = chan_val * STICK_SCALE / CHAN_MAX_VALUE + 1024;
 
-    if (chan_val > 2047)   chan_val = 2047;
-    else if (chan_val < 0) chan_val = 0;
+    if (chan_val > 2046)   chan_val = 2046;
+    else if (chan_val < 1) chan_val = 1;
 
     if (chan > 7) chan_val += 2048;   // upper channels offset
 
@@ -242,7 +249,7 @@ static void frskyX_data_frame() {
 
 
     // data frames sent every 9ms; failsafe every 9 seconds
-    if (failsafe_count > FAILSAFE_TIMEOUT && FS_flag == 0 && chan_offset == 0) {
+    if (FS_flag == 0  &&  failsafe_count > FAILSAFE_TIMEOUT  &&  chan_offset == 0  &&  Model.proto_opts[PROTO_OPTS_FAILSAFE] != FAILSAFE_RX) {
         FS_flag = 0x10;
         failsafe_chan = 0;
     } else if (FS_flag & 0x10 && failsafe_chan < (Model.num_channels-1)) {
@@ -273,9 +280,7 @@ static void frskyX_data_frame() {
     startChan = chan_offset;
 
     for(u8 i = 0; i < 12 ; i += 3) {    // 12 bytes of channel data
-        if (FS_flag & 0x10
-        && (((failsafe_chan & 0x7) | chan_offset) == startChan)
-        && (Model.limits[failsafe_chan].flags & CH_FAILSAFE_EN)) {
+        if (FS_flag & 0x10 && (((failsafe_chan & 0x7) | chan_offset) == startChan)) {
             packet[7] = FS_flag;
             chan_0 = scaleForPXX(failsafe_chan, 1);
         } else {
@@ -283,9 +288,7 @@ static void frskyX_data_frame() {
         }
         startChan++;
 
-        if (FS_flag & 0x10
-        && (((failsafe_chan & 0x7) | chan_offset) == startChan)
-        && (Model.limits[failsafe_chan].flags & CH_FAILSAFE_EN)) {
+        if (FS_flag & 0x10 && (((failsafe_chan & 0x7) | chan_offset) == startChan)) {
             packet[7] = FS_flag;
             chan_1 = scaleForPXX(failsafe_chan, 1);
         } else {
