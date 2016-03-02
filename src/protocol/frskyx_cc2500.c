@@ -213,7 +213,7 @@ static u16 scaleForPXX(u8 chan, u8 failsafe)
         if (Model.limits[chan].flags & CH_FAILSAFE_EN)
             chan_val = Model.limits[chan].failsafe * CHAN_MULTIPLIER;
         else if (Model.proto_opts[PROTO_OPTS_FAILSAFE] == FAILSAFE_HOLD)
-            return (chan < 8) ? 2046 : 4095;    // Hold
+            return (chan < 8) ? 2047 : 4095;    // Hold
         else
             return (chan < 8) ? 0 : 2048;       // No Pulses
     else
