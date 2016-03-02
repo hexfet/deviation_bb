@@ -200,8 +200,12 @@ static u16 scaleForPXX(u8 chan, u8 failsafe)
 // 0-2047, 0 = 817, 1024 = 1500, 2047 = 2182
     s32 chan_val;
 
-    if (chan >= Model.num_channels)
+    if (chan >= Model.num_channels) {
+        if (chan > 7 && !failsafe)
+            return scaleForPXX(chan-8, 0);
+
         return (chan < 8) ? 1024 : 3072;   // center values
+    }
 
     if (failsafe)
         chan_val = Model.limits[chan].failsafe * CHAN_MULTIPLIER;
