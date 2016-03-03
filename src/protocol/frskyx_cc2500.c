@@ -371,14 +371,7 @@ static void frskyX_data_frame() {
 #define SPORT_DATA_U32(packet)  (*((uint32_t *)(packet+4)))
 #define HUB_DATA_U16(packet)    (*((uint16_t *)(packet+4)))
 
-void debugTelem(u16 id, u8 value) {
-  Telemetry.value[TELEM_FRSKY_TEMP1] = id >> 8;
-  TELEMETRY_SetUpdated(TELEM_FRSKY_TEMP1);
-  Telemetry.value[TELEM_FRSKY_TEMP2] = id & 0xff;
-  TELEMETRY_SetUpdated(TELEM_FRSKY_TEMP2);
-  Telemetry.value[TELEM_FRSKY_RPM] = value;
-  TELEMETRY_SetUpdated(TELEM_FRSKY_RPM);
-}
+#include "frsky_d_telem.inc"
 
 void processSportPacket(u8 *packet) {
 //    u8  instance = (packet[0] & 0x1F) + 1;
@@ -398,8 +391,6 @@ void processSportPacket(u8 *packet) {
 
         u8 byte = SPORT_DATA_U8(packet);
 
-debugTelem(id, byte);
-return;
         if (id == RSSI_ID) {
             Telemetry.value[TELEM_FRSKY_TEMP1] = byte;
             TELEMETRY_SetUpdated(TELEM_FRSKY_TEMP1);
@@ -413,33 +404,33 @@ return;
         }
 
 // necessary?        if ({rssi > 0} > 0) {     /* because when Rx is OFF it happens that some old A1/A2 values are sent from the XJT module*/
-            if ((id >> 8) == 0) {
-                // The old FrSky IDs
-//                processHubPacket(id, HUB_DATA_U16(packet));
-                return;
-            }
+        if ((id >> 8) == 0) {
+            // The old FrSky IDs
+            processHubPacket(id, HUB_DATA_U16(packet));
+            return;
+        }
 
-            if (VARIO_FIRST_ID <= id && id <= VARIO_LAST_ID) {
-                Telemetry.value[TELEM_FRSKY_VOLT2] = byte;
+        if (ALT_FIRST_ID <= id && id <= POWERBOX_CNSP_LAST_ID) {
+            Telemetry.value[TELEM_FRSKY_VOLT2] = byte;
+            TELEMETRY_SetUpdated(TELEM_FRSKY_VOLT2);
+        } else {
+            switch(id) {
+            case ADC1_ID:
+                Telemetry.value[TELEM_FRSKY_VOLT2] = byte;      // In 1/100 of Volts
                 TELEMETRY_SetUpdated(TELEM_FRSKY_VOLT2);
-            } else {
-                switch(id) {
-                case ADC1_ID:
-//                    Telemetry.value[TELEM_FRSKY_VOLT2] = byte;      // In 1/100 of Volts
-//                    TELEMETRY_SetUpdated(TELEM_FRSKY_VOLT2);
-                    break;
-                case ADC2_ID:
-                    Telemetry.value[TELEM_FRSKY_VOLT3] = byte;      // In 1/100 of Volts
-                    TELEMETRY_SetUpdated(TELEM_FRSKY_VOLT3);
-                    break;
-                case BATT_ID:
-                    Telemetry.value[TELEM_FRSKY_VOLTA] = byte;      // In 1/100 of Volts
-                    TELEMETRY_SetUpdated(TELEM_FRSKY_VOLTA);
-                    break;
-                case SWR_ID:
-                    break;
-                }
+                break;
+            case ADC2_ID:
+                Telemetry.value[TELEM_FRSKY_VOLT3] = byte;      // In 1/100 of Volts
+                TELEMETRY_SetUpdated(TELEM_FRSKY_VOLT3);
+                break;
+            case BATT_ID:
+                Telemetry.value[TELEM_FRSKY_VOLTA] = byte;      // In 1/100 of Volts
+                TELEMETRY_SetUpdated(TELEM_FRSKY_VOLTA);
+                break;
+            case SWR_ID:
+                break;
             }
+        }
 // necessary?        }
     }
 }
@@ -506,23 +497,15 @@ void frsky_parse_sport_stream(u8 data) {
 
 void frsky_check_telemetry(u8 *pkt, u8 len) {
 //    u8 AD2gain = Model.proto_opts[PROTO_OPTS_AD2GAIN];
-    // only packets with the required id and packet length
+    // only process packets with the required id and packet length
     if (pkt[1] == (fixed_id & 0xff) && pkt[2] == (fixed_id >> 8) && pkt[0] == len-3) {
         if (pkt[4] > 0x36) {   // 0x36 magic number? TODO
-    //        rssi=pktt[4] / 2;
             Telemetry.value[TELEM_FRSKY_RSSI] = pkt[4] / 2; 	// Value in Db
             TELEMETRY_SetUpdated(TELEM_FRSKY_RSSI);
         } else {
-    //        RxBt=pktt[4];         
             Telemetry.value[TELEM_FRSKY_VOLT1] = pkt[4] * 10;      // In 1/100 of Volts
             TELEMETRY_SetUpdated(TELEM_FRSKY_VOLT1);
         }
-#ifdef EMULATOR
-//    printf("telem %02x", pkt[0]);
-//    for(int i=1; i < len; i++) printf(" %02x", pkt[i]);
-//    printf("\n");
-//    printf("seq_last_sent %02x, seq_last_rcvd 0x%02x\n", seq_last_sent, seq_last_rcvd);
-#endif
 
         if ((pkt[5] >> 4 & 0x0f) == 0x08) {   // restart or somesuch
             seq_last_sent = 8;
