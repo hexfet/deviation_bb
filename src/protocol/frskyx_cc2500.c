@@ -271,9 +271,9 @@ static void frskyX_data_frame() {
     packet[5] = counter_rst;
     packet[6] = RXNUM;
 
-    //  FLAGS 00 - standard packet
-    //10, 12, 14, 16, 18, 1A, 1C, 1E - failsafe packet
-    //20 - range check packet
+    // packet[7] is FLAGS
+    // 00 - standard packet
+    // 10, 12, 14, 16, 18, 1A, 1C, 1E - failsafe packet
     packet[7] = 0;    // may be replaced by failsafe below
     packet[8] = 0;
 
@@ -312,8 +312,6 @@ static void frskyX_data_frame() {
     for (u8 i = 22;i<28;i++)
       packet[i] = 0;
     
-  //  packet[28] = highByte(crc);
-  //  packet[29] = lowByte(crc);
     u16 lcrc = crc(&packet[3], 25);
     packet[28] = lcrc >> 8;
     packet[29] = lcrc;
@@ -735,14 +733,10 @@ static void initialize(int bind)
     CLOCK_StopTimer();
     coarse = (int)Model.proto_opts[PROTO_OPTS_FREQCOARSE];
     fine = Model.proto_opts[PROTO_OPTS_FREQFINE];
-    //fixed_id = 0x3e19;
     fixed_id = (u16) get_tx_id();
 
-    while(!chanskip) {
-        //    randomSeed((uint32_t)analogRead(A6) << 10 | analogRead(A7));
-        //    chanskip = random(0xfefefefe)%47;
+    while (!chanskip)
         chanskip = (get_tx_id() & 0xfefefefe) % 47;
-    }
     while((chanskip - ctr) % 4)
         ctr = (ctr+1) % 4;
     
