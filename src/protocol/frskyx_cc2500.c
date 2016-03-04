@@ -371,6 +371,7 @@ static void frskyX_data_frame() {
 #define SPORT_DATA_U32(packet)  (*((uint32_t *)(packet+4)))
 #define HUB_DATA_U16(packet)    (*((uint16_t *)(packet+4)))
 
+#if HAS_EXTENDED_TELEMETRY
 #include "frsky_d_telem.inc"
 
 void processSportPacket(u8 *packet) {
@@ -442,9 +443,9 @@ typedef enum {
     STATE_DATA_IN_FRAME,
     STATE_DATA_XOR,
 } SportStates;
+static SportStates dataState = STATE_DATA_IDLE;   // file scope so can be reset on loss of rx packet sync
 
 void frsky_parse_sport_stream(u8 data) {
-    static SportStates dataState = STATE_DATA_IDLE;
     static u8 sportRxBufferCount;
     static u8 sportRxBuffer[FRSKY_SPORT_PACKET_SIZE];   // Receive buffer. 8 bytes (full packet)
 
@@ -494,6 +495,7 @@ void frsky_parse_sport_stream(u8 data) {
     }
 }
 
+#endif // HAS_EXTENDED_TELEMETRY
 
 void frsky_check_telemetry(u8 *pkt, u8 len) {
 //    u8 AD2gain = Model.proto_opts[PROTO_OPTS_AD2GAIN];
@@ -510,14 +512,23 @@ void frsky_check_telemetry(u8 *pkt, u8 len) {
         if ((pkt[5] >> 4 & 0x0f) == 0x08) {   // restart or somesuch
             seq_last_sent = 8;
             seq_last_rcvd = 0;
+#if HAS_EXTENDED_TELEMETRY
+            dataState = STATE_DATA_IDLE;    // reset sport decoder
+#endif // HAS_EXTENDED_TELEMETRY
         } else {
-            if ((pkt[5] >> 4 & 0x03) == (seq_last_rcvd + 1) % 4) {   // ignore stream data if sequence number wrong
+            if ((pkt[5] >> 4 & 0x03) == (seq_last_rcvd + 1) % 4) {
                 seq_last_rcvd = (seq_last_rcvd + 1) % 4;
             }
+#if HAS_EXTENDED_TELEMETRY
+            else 
+                dataState = STATE_DATA_IDLE;    // reset sport decoder if sequence number wrong
+#endif // HAS_EXTENDED_TELEMETRY
         }
 
+#if HAS_EXTENDED_TELEMETRY
         for (u8 i=0; i < pkt[6]; i++)
             frsky_parse_sport_stream(pkt[7+i]);
+#endif // HAS_EXTENDED_TELEMETRY
     }
 }
 
