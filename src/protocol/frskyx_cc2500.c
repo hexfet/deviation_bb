@@ -388,12 +388,8 @@ void processSportPacket(u8 *packet) {
 #endif
 
     if (prim == DATA_FRAME)  {
-//        u32 data = SPORT_DATA_S32(packet);
-
-        u8 byte = SPORT_DATA_U8(packet);
-
         if (id == RSSI_ID) {
-            Telemetry.value[TELEM_FRSKY_TEMP1] = byte;
+            Telemetry.value[TELEM_FRSKY_TEMP1] = SPORT_DATA_U8(packet);
             TELEMETRY_SetUpdated(TELEM_FRSKY_TEMP1);
     //      frskyData.rssi.set(SPORT_DATA_U8(packet));
         }
@@ -411,26 +407,30 @@ void processSportPacket(u8 *packet) {
             return;
         }
 
-        if (ALT_FIRST_ID <= id && id <= POWERBOX_CNSP_LAST_ID) {
-            Telemetry.value[TELEM_FRSKY_VOLT2] = byte;
+        switch(id) {
+        case ADC1_ID:
+            Telemetry.value[TELEM_FRSKY_VOLT2] = SPORT_DATA_U8(packet);      // In 1/100 of Volts
             TELEMETRY_SetUpdated(TELEM_FRSKY_VOLT2);
-        } else {
-            switch(id) {
-            case ADC1_ID:
-                Telemetry.value[TELEM_FRSKY_VOLT2] = byte;      // In 1/100 of Volts
-                TELEMETRY_SetUpdated(TELEM_FRSKY_VOLT2);
-                break;
-            case ADC2_ID:
-                Telemetry.value[TELEM_FRSKY_VOLT3] = byte;      // In 1/100 of Volts
-                TELEMETRY_SetUpdated(TELEM_FRSKY_VOLT3);
-                break;
-            case BATT_ID:
-                Telemetry.value[TELEM_FRSKY_VOLTA] = byte;      // In 1/100 of Volts
-                TELEMETRY_SetUpdated(TELEM_FRSKY_VOLTA);
-                break;
-            case SWR_ID:
-                break;
-            }
+            break;
+        case ADC2_ID:
+            Telemetry.value[TELEM_FRSKY_VOLT3] = SPORT_DATA_U8(packet);      // In 1/100 of Volts
+            TELEMETRY_SetUpdated(TELEM_FRSKY_VOLT3);
+            break;
+        case BATT_ID:
+            Telemetry.value[TELEM_FRSKY_VOLTA] = SPORT_DATA_U8(packet);      // In 1/100 of Volts
+            TELEMETRY_SetUpdated(TELEM_FRSKY_VOLTA);
+            break;
+        case SWR_ID:
+            break;
+        }
+        
+        if (ALT_FIRST_ID <= id && id <= ALT_LAST_ID) {
+            Telemetry.value[TELEM_FRSKY_ALTITUDE] = SPORT_DATA_S32(packet);
+            TELEMETRY_SetUpdated(TELEM_FRSKY_ALTITUDE);
+        } else
+        if (VARIO_FIRST_ID <= id && id <= VARIO_LAST_ID) {
+            Telemetry.value[TELEM_FRSKY_CELL6] = SPORT_DATA_S32(packet);
+            TELEMETRY_SetUpdated(TELEM_FRSKY_CELL6);
         }
 // necessary?        }
     }
