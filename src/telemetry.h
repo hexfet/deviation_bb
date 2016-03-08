@@ -138,14 +138,10 @@ enum {
 #if HAS_FRSKY_EXTENDED_TELEMETRY
     TELEM_FRSKY_ALTITUDE,
     TELEM_FRSKY_ALTITUDE_DECIMETERS,
+    TELEM_FRSKY_VARIO,
 #endif
     TELEM_FRSKY_LAST
 };
-#if HAS_FRSKY_EXTENDED_TELEMETRY
-#define TELEM_FRSKY_LAST_DISPLAYED TELEM_FRSKY_ALTITUDE
-#else
-#define TELEM_FRSKY_LAST_DISPLAYED TELEM_FRSKY_CURRENT
-#endif
 
 #define TELEM_VALS        (((int)TELEM_DSM_LAST > (int)TELEM_DEVO_LAST)            \
                                ? (((int)TELEM_DSM_LAST > (int)TELEM_FRSKY_LAST)    \
@@ -205,9 +201,6 @@ enum {
 /************************************************************************/
 /*  SPort telemetry                                                     */
 /************************************************************************/
-#define VARIO_FIRST_ID            0x0110
-#define VARIO_LAST_ID             0x011f
-
 // FrSky old DATA IDs (1 byte)
 #define GPS_ALT_BP_ID             0x01
 #define TEMP1_ID                  0x02

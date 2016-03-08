@@ -221,7 +221,6 @@ const struct telem_layout frsky_layout_basic[] = {
     {TYPE_VALUE | 3, FRSKY2_X, FRSKY1_WIDTH, TELEM_FRSKY_MIN_CELL},
     {TYPE_VALUE | 3, FRSKY3_X, FRSKY1_WIDTH, TELEM_FRSKY_CELL4},
 
-
     {TYPE_INDEX | 4, LBL1_X, LBL1_WIDTH, 5},
     {TYPE_VALUE | 4, FRSKY1_X, FRSKY1_WIDTH, TELEM_FRSKY_FUEL},
     {TYPE_VALUE | 4, FRSKY2_X, FRSKY1_WIDTH, TELEM_FRSKY_VOLTA},
@@ -233,6 +232,13 @@ const struct telem_layout frsky_layout_basic[] = {
 #endif
     {TYPE_VALUE | 5, FRSKY2_X, FRSKY1_WIDTH, TELEM_FRSKY_CURRENT},
     {TYPE_VALUE | 5, FRSKY3_X, FRSKY1_WIDTH, TELEM_FRSKY_CELL6},
+
+    {TYPE_INDEX | 6, LBL1_X, LBL1_WIDTH, 7},
+#if HAS_FRSKY_EXTENDED_TELEMETRY
+    {TYPE_VALUE | 6, FRSKY1_X, FRSKY1_WIDTH, TELEM_FRSKY_VARIO},
+#endif
+//    {TYPE_VALUE | 6, FRSKY2_X, FRSKY1_WIDTH, TELEM_FRSKY_CURRENT},
+//    {TYPE_VALUE | 6, FRSKY3_X, FRSKY1_WIDTH, TELEM_FRSKY_CELL6},
 
     {0, 0, 0, 0},
 };
@@ -246,7 +252,7 @@ const struct telem_layout2 dsm_page[] = {
     {devo_header_gps, devo_layout_gps, 3, 4},
 };
 const struct telem_layout2 frsky_page[] = {
-    {frsky_header_basic, frsky_layout_basic, 6, 1},
+    {frsky_header_basic, frsky_layout_basic, 7, 1},
     {devo_header_gps, devo_layout_gps, 3, 4},
 };
 static const char *header_cb(guiObject_t *obj, const void *data)
@@ -301,10 +307,10 @@ static int row_cb(int absrow, int relrow, int y, void *data)
             case TYPE_INDEX:  font = &TINY_FONT; cmd = idx_cb; break;
             case TYPE_HEADER: cmd = header_cb; break;
             case TYPE_LABEL:  cmd = label_cb; break;
-            case TYPE_LABEL3: cmd = label_cb; y =orig_y + 2*LINE_HEIGHT; break;
+            case TYPE_LABEL3: cmd = label_cb; y = orig_y + 2*LINE_HEIGHT; break;
             case TYPE_VALUE:  font = &tp->font;  cmd = telem_cb; break;
-            case TYPE_VALUE2: font = &tp->font;  cmd = telem_cb; y = orig_y + LINE_HEIGHT;break;
-            case TYPE_VALUE4: font = &tp->font;  cmd = telem_cb; y =orig_y + 3*LINE_HEIGHT; break;
+            case TYPE_VALUE2: font = &tp->font;  cmd = telem_cb; y = orig_y + LINE_HEIGHT; break;
+            case TYPE_VALUE4: font = &tp->font;  cmd = telem_cb; y = orig_y + 3*LINE_HEIGHT; break;
         }
         GUI_CreateLabelBox(&gui->box[i], ptr->x, y, ptr->width, LINE_HEIGHT,
                 font, cmd, NULL, (void *)(long)ptr->source);
