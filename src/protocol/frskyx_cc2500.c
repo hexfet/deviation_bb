@@ -371,14 +371,40 @@ static void frskyX_data_frame() {
 #define SPORT_DATA_U32(packet)  (*((uint32_t *)(packet+4)))
 #define HUB_DATA_U16(packet)    (*((uint16_t *)(packet+4)))
 
+
 #if HAS_EXTENDED_TELEMETRY
+
+
 #include "frsky_d_telem.inc"
+
+// helper functions
+void set_telemetry(u8 offset, s32 value) {
+    Telemetry.value[offset] = value;
+    TELEMETRY_SetUpdated(offset);
+}
+
+void update_cell(u8 cell, s32 value) {
+    if (cell < 6) {
+        Telemetry.value[TELEM_FRSKY_VOLT3] += value - Telemetry.value[TELEM_FRSKY_CELL1 + cell];
+        TELEMETRY_SetUpdated(TELEM_FRSKY_VOLT3);    // battery total
+
+        Telemetry.value[TELEM_FRSKY_CELL1 + cell] = value;
+        TELEMETRY_SetUpdated(TELEM_FRSKY_CELL1 + cell);
+
+        if (Telemetry.value[TELEM_FRSKY_MIN_CELL] == 0 || (value < Telemetry.value[TELEM_FRSKY_MIN_CELL])) {
+            Telemetry.value[TELEM_FRSKY_MIN_CELL] = value;
+            TELEMETRY_SetUpdated(TELEM_FRSKY_MIN_CELL);
+        }
+    }
+}
+
+
 
 void processSportPacket(u8 *packet) {
 //    u8  instance = (packet[0] & 0x1F) + 1;
-    u8  prim     = packet[1];
-    u16 id       = *((u16 *)(packet+2));
-
+    u8  prim                = packet[1];
+    u16 id                  = *((u16 *)(packet+2));
+    static s32 ground_level;
 
 #ifdef EMULATOR
 //printf("processing sport packet %02x", packet[0]);
@@ -387,53 +413,124 @@ void processSportPacket(u8 *packet) {
 //printf("prim 0x%02x, id 0x%02x\n", prim, id);
 #endif
 
-    if (prim == DATA_FRAME)  {
-        if (id == RSSI_ID) {
-            Telemetry.value[TELEM_FRSKY_TEMP1] = SPORT_DATA_U8(packet);
-            TELEMETRY_SetUpdated(TELEM_FRSKY_TEMP1);
-    //      frskyData.rssi.set(SPORT_DATA_U8(packet));
-        }
-        else if (id == XJT_VERSION_ID) {
-    //      frskyData.xjtVersion = HUB_DATA_U16(packet);
-        }
-        else if (id == SWR_ID) {
-    //      frskyData.swr.set(SPORT_DATA_U8(packet));
-        }
+    if (prim != DATA_FRAME)
+        return;
 
-// necessary?        if ({rssi > 0} > 0) {     /* because when Rx is OFF it happens that some old A1/A2 values are sent from the XJT module*/
-        if ((id >> 8) == 0) {
-            // The old FrSky IDs
-            processHubPacket(id, HUB_DATA_U16(packet));
-            return;
-        }
-
-        switch(id) {
-        case ADC1_ID:
-            Telemetry.value[TELEM_FRSKY_VOLT2] = SPORT_DATA_U8(packet);      // In 1/100 of Volts
-            TELEMETRY_SetUpdated(TELEM_FRSKY_VOLT2);
-            break;
-        case ADC2_ID:
-            Telemetry.value[TELEM_FRSKY_VOLT3] = SPORT_DATA_U8(packet);      // In 1/100 of Volts
-            TELEMETRY_SetUpdated(TELEM_FRSKY_VOLT3);
-            break;
-        case BATT_ID:
-            Telemetry.value[TELEM_FRSKY_VOLTA] = SPORT_DATA_U8(packet);      // In 1/100 of Volts
-            TELEMETRY_SetUpdated(TELEM_FRSKY_VOLTA);
-            break;
-        case SWR_ID:
-            break;
-        }
-        
-        if (ALT_FIRST_ID <= id && id <= ALT_LAST_ID) {
-            Telemetry.value[TELEM_FRSKY_ALTITUDE] = SPORT_DATA_S32(packet);
-            TELEMETRY_SetUpdated(TELEM_FRSKY_ALTITUDE);
-        } else
-        if (VARIO_FIRST_ID <= id && id <= VARIO_LAST_ID) {
-            Telemetry.value[TELEM_FRSKY_CELL6] = SPORT_DATA_S32(packet);
-            TELEMETRY_SetUpdated(TELEM_FRSKY_CELL6);
-        }
-// necessary?        }
+    if ((id >> 8) == 0) {
+        // The old FrSky IDs
+        processHubPacket(id, HUB_DATA_U16(packet));
+        return;
     }
+
+    // rx telemetry ??
+    switch(id) {
+    case ADC1_ID:
+        Telemetry.value[TELEM_FRSKY_VOLT2] = SPORT_DATA_U8(packet);      // In 1/100 of Volts
+        TELEMETRY_SetUpdated(TELEM_FRSKY_VOLT2);
+        break;
+    case ADC2_ID:
+        Telemetry.value[TELEM_FRSKY_VOLT3] = SPORT_DATA_U8(packet);      // In 1/100 of Volts
+        TELEMETRY_SetUpdated(TELEM_FRSKY_VOLT3);
+        break;
+    case BATT_ID:
+        Telemetry.value[TELEM_FRSKY_VOLTA] = SPORT_DATA_U8(packet);      // In 1/100 of Volts
+        TELEMETRY_SetUpdated(TELEM_FRSKY_VOLTA);
+        break;
+    }
+    
+    u32 data = SPORT_DATA_S32(packet);
+    switch (id & 0xfff0) {
+    case ALT_FIRST_ID & 0xfff0:
+        if (ground_level == 0) ground_level = data;
+        set_telemetry(TELEM_FRSKY_ALTITUDE, (data - ground_level) / 100);
+        break;
+    case VARIO_FIRST_ID & 0xfff0:
+        set_telemetry(TELEM_FRSKY_CELL6, data);
+        break;
+    case CURR_FIRST_ID & 0xfff0:
+        set_telemetry(TELEM_FRSKY_CURRENT, data);
+        break;;
+    case VFAS_FIRST_ID & 0xfff0:
+        set_telemetry(TELEM_FRSKY_VOLTA, data);
+        break;
+
+    case CELLS_FIRST_ID & 0xfff0:{
+        u8 cells_count = (data & 0xF0) >> 4;
+        u8 cell_index  = (data & 0x0F);
+        update_cell(cell_index, ((data & 0x000FFF00) >> 8) / 5);
+        if (cell_index+1 < cells_count)
+            update_cell(cell_index+1, ((data & 0xFFF00000) >> 20) / 5);
+        break;}
+
+    case T1_FIRST_ID & 0xfff0:
+        set_telemetry(TELEM_FRSKY_TEMP1, data);
+        break;
+    case T2_FIRST_ID & 0xfff0:
+        set_telemetry(TELEM_FRSKY_TEMP2, data);
+        break;
+    case RPM_FIRST_ID & 0xfff0:
+        set_telemetry(TELEM_FRSKY_RPM, data * 60);
+        break;
+    case FUEL_FIRST_ID & 0xfff0:
+        set_telemetry(TELEM_FRSKY_FUEL, data * 60);
+        break;
+
+    case GPS_LONG_LATI_FIRST_ID & 0xfff0:{
+        u32 gps_long_lati_b1w = (data & 0x3fffffff) / 10000;
+        u32 gps_long_lati_a1w = (data & 0x3fffffff) % 10000;
+        s32 bp = (gps_long_lati_b1w / 60 * 100) + (gps_long_lati_b1w % 60);
+        s32 ap = gps_long_lati_a1w;
+        s32 deg = bp / 100;
+        s32 min = bp % 100;
+        if (data & (1 << 31)) {
+            Telemetry.gps.longitude = (deg * 60 + min) * 60 * 1000 + ap * 6;
+            if (data & (1 << 30))
+                Telemetry.gps.longitude = -Telemetry.gps.longitude;   // west negative
+            TELEMETRY_SetUpdated(TELEM_GPS_LONG);
+        } else {
+            Telemetry.gps.latitude = (deg * 60 + min) * 60 * 1000 + ap * 6;
+            if (data & (1 << 30))
+                Telemetry.gps.latitude = -Telemetry.gps.latitude;   // south negative
+            TELEMETRY_SetUpdated(TELEM_GPS_LAT);
+        }
+        break;}
+
+    case GPS_ALT_FIRST_ID & 0xfff0:
+        Telemetry.gps.altitude = data / 100;
+        TELEMETRY_SetUpdated(TELEM_GPS_ALT);
+        break;
+    case GPS_SPEED_FIRST_ID & 0xfff0:
+        Telemetry.gps.velocity = data * 5556 / 1080;
+        TELEMETRY_SetUpdated(TELEM_GPS_SPEED);
+        break;
+    case GPS_COURS_FIRST_ID & 0xfff0:
+        // = TELEM_GPS_HEADING;
+        break;
+    case GPS_TIME_DATE_FIRST_ID & 0xfff0:
+        if (data & 0x000000ff) {
+            fr_gps.year =      (u16) ((data & 0xff000000) >> 24);
+            fr_gps.day_month = (u16) ((data & 0x00ffff00) >> 8);
+        } else {
+            fr_gps.hour_min = (u16) ((data & 0xffff0000) >> 16);
+            fr_gps.second =   (u16) ((data & 0x0000ff00) >> 8);
+            Telemetry.gps.time = ( (u32)fr_gps.year & 0x3f)            << 26
+                               | (((u32)fr_gps.day_month >> 8) & 0x0f) << 22
+                               | ( (u32)fr_gps.day_month & 0x1f)       << 17
+                               | ( (u32)fr_gps.hour_min & 0x1f)        << 12
+                               | (((u32)fr_gps.hour_min >> 8) & 0x3f)  << 6
+                               | ( (u32)fr_gps.second & 0x3f);
+            TELEMETRY_SetUpdated(TELEM_GPS_TIME);
+        }
+        break;
+    } // switch
+#if 0 // not sure about these
+    case A3_FIRST_ID & 0xfff0:
+    case A4_FIRST_ID & 0xfff0:
+    case AIR_SPEED_FIRST_ID & 0xfff0:
+    case ACCX_FIRST_ID & 0xfff0:
+    case ACCY_FIRST_ID & 0xfff0:
+    case ACCZ_FIRST_ID & 0xfff0:
+#endif
 }
 
 
