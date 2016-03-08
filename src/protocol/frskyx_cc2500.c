@@ -187,9 +187,9 @@ static void frskyX_build_bind_packet()
     packet[28] = lcrc >> 8;
     packet[29] = lcrc;
 #ifdef EMULATOR
-    printf("packet %02x", packet[0]);
-    for(int i=1; i < PACKET_SIZE; i++) printf(" %02x", packet[i]);
-    printf("\n");
+//    printf("packet %02x", packet[0]);
+//    for(int i=1; i < PACKET_SIZE; i++) printf(" %02x", packet[i]);
+//    printf("\n");
 #endif
 
 }
@@ -316,9 +316,9 @@ static void frskyX_data_frame() {
     packet[28] = lcrc >> 8;
     packet[29] = lcrc;
 #ifdef EMULATOR
-    printf("packet %02x", packet[0]);
-    for(int i=1; i < PACKET_SIZE; i++) printf(" %02x", packet[i]);
-    printf("\n");
+//    printf("packet %02x", packet[0]);
+//    for(int i=1; i < PACKET_SIZE; i++) printf(" %02x", packet[i]);
+//    printf("\n");
 #endif
 } 
 
@@ -445,7 +445,7 @@ void processSportPacket(u8 *packet) {
         set_telemetry(TELEM_FRSKY_ALTITUDE, (data - ground_level) / 100);
         break;
     case VARIO_FIRST_ID & 0xfff0:
-        set_telemetry(TELEM_FRSKY_CELL6, data);
+        set_telemetry(TELEM_FRSKY_VARIO, data / 100);
         break;
     case CURR_FIRST_ID & 0xfff0:
         set_telemetry(TELEM_FRSKY_CURRENT, data);
