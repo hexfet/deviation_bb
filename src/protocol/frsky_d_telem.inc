@@ -65,9 +65,10 @@ void processHubPacket(u8 id, u16 value) {
         }
         break;
         }
+
 #if HAS_FRSKY_EXTENDED_TELEMETRY
     case 0x10: //ALT (whole number & sign) -500m-9000m (.01m/count)
-        Telemetry.value[TELEM_FRSKY_ALTITUDE] = value;
+        Telemetry.value[TELEM_FRSKY_ALTITUDE] = value / 100;
         TELEMETRY_SetUpdated(TELEM_FRSKY_ALTITUDE);
         break;
     case 0x21: //ALT (fraction)
@@ -75,7 +76,8 @@ void processHubPacket(u8 id, u16 value) {
         Telemetry.value[TELEM_FRSKY_ALTITUDE_DECIMETERS] = value;
         TELEMETRY_SetUpdated(TELEM_FRSKY_ALTITUDE);
         break;
-#endif
+#endif // HAS_FRSKY_EXTENDED_TELEMETRY
+
     case 0x11: //GPS Speed (whole number and sign) in Knots
         fr_gps.velocity_bp = value;
         break;
@@ -94,7 +96,7 @@ void processHubPacket(u8 id, u16 value) {
     case 0x22: { //GPS Longitude E/W
         s32 deg = fr_gps.longitude_bp / 100;
         s32 min = fr_gps.longitude_bp % 100;
-        Telemetry.gps.longitude = (deg * 60 + min) * 60 * 1000 + fr_gps.longitude_bp * 6;
+        Telemetry.gps.longitude = (deg * 60 + min) * 60 * 1000 + fr_gps.longitude_ap * 6;
         if (value == 'W')
             Telemetry.gps.longitude = -Telemetry.gps.longitude;
         TELEMETRY_SetUpdated(TELEM_GPS_LONG);
@@ -108,7 +110,7 @@ void processHubPacket(u8 id, u16 value) {
     case 0x23: { //GPS Latitude N/S
         s32 deg = fr_gps.latitude_bp / 100;
         s32 min = fr_gps.latitude_bp % 100;
-        Telemetry.gps.latitude = (deg * 60 + min) * 60 * 1000 + fr_gps.latitude_bp * 6;
+        Telemetry.gps.latitude = (deg * 60 + min) * 60 * 1000 + fr_gps.latitude_ap * 6;
         if (value == 'S')
             Telemetry.gps.latitude = -Telemetry.gps.latitude;
         TELEMETRY_SetUpdated(TELEM_GPS_LAT);
