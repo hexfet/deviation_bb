@@ -186,7 +186,7 @@ struct gps {
 #define TELEM_UPDATE_SIZE (((TELEM_VALS + 7) + 31) / 32)
 struct Telemetry {
     struct gps gps;
-    u16 value[TELEM_VALS];
+    s16 value[TELEM_VALS];
     u16 capabilities;
     volatile u32 updated[TELEM_UPDATE_SIZE];
 };
