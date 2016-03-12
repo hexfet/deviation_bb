@@ -21,11 +21,10 @@ s32 _frsky_value(struct Telemetry *t, int idx)
             return (s16)t->value[idx];
 #if HAS_FRSKY_EXTENDED_TELEMETRY
         case TELEM_FRSKY_ALTITUDE:
-            // Multiply by 100 because of decimal 2 in _frsky_str_by_value
-            return 100 * ((s32) t->value[idx])
+            return ((s32) t->value[idx])
                    + t->value[TELEM_FRSKY_ALTITUDE_DECIMETERS];
         case TELEM_FRSKY_VARIO:
-            return 100 * ((s32) t->value[idx]);
+            return ((s32) t->value[idx]);
 #endif
         default:
             return t->value[idx];
@@ -56,8 +55,6 @@ const char * _frsky_str_by_value(char *str, u8 telem, s32 value)
 #if HAS_FRSKY_EXTENDED_TELEMETRY
         case TELEM_FRSKY_ALTITUDE:
         case TELEM_FRSKY_VARIO:
-            // The decimal value of 2 here means we multiply
-            // t->value[TELEM_FRSKY_ALTITUDE] by 100 in _frsky_value
             _get_altitude_str(str, value, 2, 'm');
             break;
 #endif
@@ -140,8 +137,8 @@ s32 _frsky_get_max_value(u8 telem)
         case TELEM_FRSKY_FUEL:      return 100;
         case TELEM_FRSKY_CURRENT:   return 1000;
 #if HAS_FRSKY_EXTENDED_TELEMETRY
-        case TELEM_FRSKY_ALTITUDE:  return 900000; //x100
-        case TELEM_FRSKY_VARIO:     return 500000; //x100
+        case TELEM_FRSKY_ALTITUDE:  return 900000; // cm
+        case TELEM_FRSKY_VARIO:     return 500000; // cm
 #endif
         default:
             return 0;
