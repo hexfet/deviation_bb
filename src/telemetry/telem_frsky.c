@@ -54,9 +54,8 @@ const char * _frsky_str_by_value(char *str, u8 telem, s32 value)
         case TELEM_FRSKY_CURRENT: _get_value_str(str, value, 1, 'A'); break;
 #if HAS_FRSKY_EXTENDED_TELEMETRY
         case TELEM_FRSKY_ALTITUDE:
-        case TELEM_FRSKY_VARIO:
-            _get_altitude_str(str, value, 2, 'm');
-            break;
+        case TELEM_FRSKY_VARIO: _get_altitude_str(str, value, 2, 'm'); break;
+        case TELEM_FRSKY_DISCHARGE: _get_value_str(str, value, 0, 'D'); break;
 #endif
         default:
             return "";
@@ -88,6 +87,7 @@ const char * _frsky_short_name(char *str, u8 telem)
 #if HAS_FRSKY_EXTENDED_TELEMETRY
         case TELEM_FRSKY_ALTITUDE: strcpy(str, _tr("Alt")); break;
         case TELEM_FRSKY_VARIO: strcpy(str, _tr("VSI")); break;
+        case TELEM_FRSKY_DISCHARGE: strcpy(str, _tr("DIS")); break;
 #endif
         default: sprintf(str, "FrST%d", telem); break;
     }
@@ -139,6 +139,7 @@ s32 _frsky_get_max_value(u8 telem)
 #if HAS_FRSKY_EXTENDED_TELEMETRY
         case TELEM_FRSKY_ALTITUDE:  return 900000; // cm
         case TELEM_FRSKY_VARIO:     return 500000; // cm
+        case TELEM_FRSKY_DISCHARGE: return 500000;
 #endif
         default:
             return 0;
