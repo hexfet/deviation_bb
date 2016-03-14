@@ -375,7 +375,6 @@ static void frskyX_data_frame() {
 #if HAS_EXTENDED_TELEMETRY
 
 
-#include "frsky_d_telem.inc"
 
 // helper functions
 void set_telemetry(u8 offset, s32 value) {
@@ -398,14 +397,16 @@ void update_cell(u8 cell, s32 value) {
     }
 }
 
+static s32 ground_level;
+static u32 discharge_time;
+
+#include "frsky_d_telem.inc"
 
 
 void processSportPacket(u8 *packet) {
 //    u8  instance = (packet[0] & 0x1F) + 1;
     u8  prim                = packet[1];
     u16 id                  = *((u16 *)(packet+2));
-    static s32 ground_level;
-    static u32 discharge_time;
 
 #ifdef EMULATOR
 //printf("processing sport packet %02x", packet[0]);
