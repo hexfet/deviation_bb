@@ -140,8 +140,10 @@ void processHubPacket(u8 id, u16 value) {
     //case 0x25: //Accel Y
     //case 0x26: //Accel Z
     case 0x28: //Current 0A-100A (0.1A/count)
-        Telemetry.value[TELEM_FRSKY_CURRENT] = value;
-        TELEMETRY_SetUpdated(TELEM_FRSKY_CURRENT);
+        set_telemetry(TELEM_FRSKY_CURRENT, value);
+        if (discharge_time == 0) discharge_time = CLOCK_getms();
+        set_telemetry(TELEM_FRSKY_DISCHARGE, Telemetry.value[TELEM_FRSKY_DISCHARGE] + value * (CLOCK_getms() - discharge_time) / 36000);
+        discharge_time = CLOCK_getms();
         break;
     case 0x3A: //Ampere sensor (whole number) (measured as V) 0V-48V (0.5V/count)
         fr_gps.amp_voltage_bp = value;
