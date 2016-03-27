@@ -47,6 +47,7 @@ void _get_value_str(char *str, s32 value, u8 decimals, char units)
     sprintf(str, format, value);
 
     int i, len = strlen(str);
+    if (str[0] == '-') { str++; len--; }
     if (decimals && len <= 2 + decimals && value) {
         for (i = len; i > len - decimals; i--) {
             str[i] = str[i-1];
@@ -285,7 +286,7 @@ void TELEMETRY_SetTypeByProtocol(enum Protocols protocol)
 {
     if (protocol == PROTOCOL_DSM2 || protocol == PROTOCOL_DSMX)
         TELEMETRY_SetType(TELEM_DSM);
-    else if (protocol == PROTOCOL_FRSKY2WAY)
+    else if (protocol == PROTOCOL_FRSKY2WAY || protocol == PROTOCOL_FRSKYX)
         TELEMETRY_SetType(TELEM_FRSKY);
     else
         TELEMETRY_SetType(TELEM_DEVO);
