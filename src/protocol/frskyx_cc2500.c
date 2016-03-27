@@ -841,6 +841,7 @@ static void initialize(int bind)
     counter_rst = (chanskip - ctr) >> 2;
 
     frskyX_init(); 
+    CC2500_SetTxRxMode(TX_EN);  // enable PA 
 
     if (bind) {
         PROTOCOL_SetBindState(0xFFFFFFFF);
