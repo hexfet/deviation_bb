@@ -374,8 +374,6 @@ static void frskyX_data_frame() {
 
 #if HAS_EXTENDED_TELEMETRY
 
-
-
 // helper functions
 void update_cell(u8 cell, s32 value) {
     if (cell < 6) {
