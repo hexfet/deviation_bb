@@ -377,11 +377,6 @@ static void frskyX_data_frame() {
 
 
 // helper functions
-void set_telemetry(u8 offset, s32 value) {
-    Telemetry.value[offset] = value;
-    TELEMETRY_SetUpdated(offset);
-}
-
 void update_cell(u8 cell, s32 value) {
     if (cell < 6) {
         Telemetry.value[TELEM_FRSKY_VOLT3] += value - Telemetry.value[TELEM_FRSKY_CELL1 + cell];
@@ -397,9 +392,6 @@ void update_cell(u8 cell, s32 value) {
     }
 }
 
-static s32 ground_level;
-static u32 discharge_time;
-static u32 discharge_dAms;   // deciAmp-milliseconds
 
 #include "frsky_d_telem.inc"
 
