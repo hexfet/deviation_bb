@@ -198,6 +198,10 @@ static void frsky2way_build_data_packet()
     //}
 }
 
+
+
+#if HAS_EXTENDED_TELEMETRY
+
 #include "frsky_d_telem.inc"
 
 
@@ -244,6 +248,7 @@ void frsky_parse_telem_stream(u8 byte) {
     processHubPacket(data_id, value);
 }
 
+#endif // HAS_EXTENDED_TELEMETRY
 
 static void frsky2way_parse_telem(u8 *pkt, int len)
 {
@@ -268,8 +273,10 @@ static void frsky2way_parse_telem(u8 *pkt, int len)
     Telemetry.value[TELEM_FRSKY_RSSI] = pkt[5]; 	// Value in Db
     TELEMETRY_SetUpdated(TELEM_FRSKY_RSSI);
 
+#if HAS_EXTENDED_TELEMETRY
     for(int i = 6; i < len - 4; i++)
         frsky_parse_telem_stream(pkt[i]);
+#endif // HAS_EXTENDED_TELEMETRY
 }
 
 
