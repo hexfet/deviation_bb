@@ -80,8 +80,6 @@ static void processHubPacket(u8 id, u16 value) {
         }
         break;
         }
-
-#if HAS_FRSKY_EXTENDED_TELEMETRY
     case 0x10: //ALT (whole number & sign) -500m-9000m (.01m/count)
         if (ground_level == 0) ground_level = value;
         set_telemetry(TELEM_FRSKY_ALTITUDE, value - ground_level);
@@ -90,8 +88,6 @@ static void processHubPacket(u8 id, u16 value) {
             //convert to mm
         set_telemetry(TELEM_FRSKY_ALTITUDE_DECIMETERS, value);
         break;
-#endif // HAS_FRSKY_EXTENDED_TELEMETRY
-
     case 0x11: //GPS Speed (whole number and sign) in Knots
         fr_gps.velocity_bp = value;
         break;
