@@ -39,15 +39,13 @@
 static const char * const frsky_opts[] = {
   _tr_noop("Telemetry"),  _tr_noop("On"), _tr_noop("Off"), NULL,
   _tr_noop("Freq-Fine"),  "-127", "127", NULL,
-  _tr_noop("Freq-Course"),  "-127", "127", NULL,
   _tr_noop("AD2GAIN"),  "1", "255", NULL,
   NULL
 };
 enum {
     PROTO_OPTS_TELEM = 0,
-    PROTO_OPTS_FREQFINE = 1,
-    PROTO_OPTS_FREQCOURSE = 2,
-    PROTO_OPTS_AD2GAIN = 3,
+    PROTO_OPTS_FREQFINE,
+    PROTO_OPTS_AD2GAIN,
     LAST_PROTO_OPT,
 };
 ctassert(LAST_PROTO_OPT <= NUM_PROTO_OPTS, too_many_protocol_opts);
@@ -58,7 +56,6 @@ static u8 packet[40];
 static u32 state;
 static u8 counter;
 static u32 fixed_id;
-static s8 course;
 static s8 fine;
 
 
@@ -85,7 +82,7 @@ static void frsky2way_init(int bind)
         CC2500_WriteReg(CC2500_0C_FSCTRL0, fine);
         CC2500_WriteReg(CC2500_0D_FREQ2, 0x5c);
         CC2500_WriteReg(CC2500_0E_FREQ1, 0x76);
-        CC2500_WriteReg(CC2500_0F_FREQ0, 0x27 + course);
+        CC2500_WriteReg(CC2500_0F_FREQ0, 0x27);
         CC2500_WriteReg(CC2500_10_MDMCFG4, 0xaa);
         CC2500_WriteReg(CC2500_11_MDMCFG3, 0x39);
         CC2500_WriteReg(CC2500_12_MDMCFG2, 0x11);
@@ -340,11 +337,9 @@ static u16 frsky2way_cb()
             CC2500_SetPower(Model.tx_power);
         }
         CC2500_Strobe(CC2500_SIDLE);
-        if (fine != (s8)Model.proto_opts[PROTO_OPTS_FREQFINE] || course != (s8)Model.proto_opts[PROTO_OPTS_FREQCOURSE]) {
-            course = Model.proto_opts[PROTO_OPTS_FREQCOURSE];
+        if (fine != (s8)Model.proto_opts[PROTO_OPTS_FREQFINE]) {
             fine   = Model.proto_opts[PROTO_OPTS_FREQFINE];
             CC2500_WriteReg(CC2500_0C_FSCTRL0, fine);
-            CC2500_WriteReg(CC2500_0F_FREQ0, 0x27 + course);
         }
         CC2500_WriteReg(CC2500_0A_CHANNR, get_chan_num(counter % 47));
         CC2500_WriteReg(CC2500_23_FSCAL3, 0x89);
@@ -375,7 +370,6 @@ static int get_tx_id()
 static void initialize(int bind)
 {
     CLOCK_StopTimer();
-    course = (int)Model.proto_opts[PROTO_OPTS_FREQCOURSE];
     fine = Model.proto_opts[PROTO_OPTS_FREQFINE];
     //fixed_id = 0x3e19;
     fixed_id = get_tx_id();
