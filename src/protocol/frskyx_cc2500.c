@@ -416,13 +416,14 @@ void processSportPacket(u8 *packet) {
     }
 
     // rx telemetry ??
+    u8 AD2gain = Model.proto_opts[PROTO_OPTS_AD2GAIN];
     switch(id) {
     case ADC1_ID:
         Telemetry.value[TELEM_FRSKY_VOLT2] = SPORT_DATA_U8(packet);      // In 1/100 of Volts
         TELEMETRY_SetUpdated(TELEM_FRSKY_VOLT2);
         break;
     case ADC2_ID:
-        Telemetry.value[TELEM_FRSKY_VOLT3] = SPORT_DATA_U8(packet);      // In 1/100 of Volts
+        Telemetry.value[TELEM_FRSKY_VOLT3] = SPORT_DATA_U8(packet) * (AD2gain / 10);      // In 1/100 of Volts
         TELEMETRY_SetUpdated(TELEM_FRSKY_VOLT3);
         break;
     case BATT_ID:
@@ -592,7 +593,6 @@ void frsky_parse_sport_stream(u8 data) {
 #endif // HAS_EXTENDED_TELEMETRY
 
 void frsky_check_telemetry(u8 *pkt, u8 len) {
-//    u8 AD2gain = Model.proto_opts[PROTO_OPTS_AD2GAIN];
     // only process packets with the required id and packet length
     if (pkt[1] == (fixed_id & 0xff) && pkt[2] == (fixed_id >> 8) && pkt[0] == len-3) {
         if (pkt[4] > 0x36) {   // 0x36 magic number? TODO
