@@ -148,7 +148,7 @@ static u16 crc(u8 *data, u8 len) {
 static void initialize_data(u8 adr)
 {
   CC2500_WriteReg(CC2500_0C_FSCTRL0, fine);  // Frequency offset hack 
-  CC2500_WriteReg(CC2500_18_MCSM0,    0x8); 
+  CC2500_WriteReg(CC2500_18_MCSM0, 0x8); 
   CC2500_WriteReg(CC2500_09_ADDR, adr ? 0x03 : (fixed_id & 0xff));
   CC2500_WriteReg(CC2500_07_PKTCTRL1,0x05);
 }
@@ -396,8 +396,8 @@ void update_cell(u8 cell, s32 value) {
 
 void processSportPacket(u8 *packet) {
 //    u8  instance = (packet[0] & 0x1F) + 1;
-    u8  prim                = packet[1];
-    u16 id                  = *((u16 *)(packet+2));
+    u8  prim = packet[1];
+    u16 id = *((u16 *)(packet+2));
 
 #ifdef EMULATOR
 //printf("processing sport packet %02x", packet[0]);
@@ -521,14 +521,13 @@ void processSportPacket(u8 *packet) {
         }
         break;
     } // switch
-#if 0 // not sure about these
-    case A3_FIRST_ID & 0xfff0:
-    case A4_FIRST_ID & 0xfff0:
-    case AIR_SPEED_FIRST_ID & 0xfff0:
-    case ACCX_FIRST_ID & 0xfff0:
-    case ACCY_FIRST_ID & 0xfff0:
-    case ACCZ_FIRST_ID & 0xfff0:
-#endif
+// not sure about these
+//  case A3_FIRST_ID & 0xfff0:
+//  case A4_FIRST_ID & 0xfff0:
+//  case AIR_SPEED_FIRST_ID & 0xfff0:
+//  case ACCX_FIRST_ID & 0xfff0:
+//  case ACCY_FIRST_ID & 0xfff0:
+//  case ACCZ_FIRST_ID & 0xfff0:
 }
 
 
@@ -596,7 +595,7 @@ void frsky_check_telemetry(u8 *pkt, u8 len) {
     // only process packets with the required id and packet length
     if (pkt[1] == (fixed_id & 0xff) && pkt[2] == (fixed_id >> 8) && pkt[0] == len-3) {
         if (pkt[4] > 0x36) {   // 0x36 magic number? TODO
-            Telemetry.value[TELEM_FRSKY_RSSI] = pkt[4] / 2; 	// Value in Db
+            Telemetry.value[TELEM_FRSKY_RSSI] = pkt[4] / 2;        // Value in Db
             TELEMETRY_SetUpdated(TELEM_FRSKY_RSSI);
         } else {
             Telemetry.value[TELEM_FRSKY_VOLT1] = pkt[4] * 10;      // In 1/100 of Volts
