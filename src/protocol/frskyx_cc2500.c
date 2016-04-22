@@ -375,12 +375,12 @@ static void frskyX_data_frame() {
 #if HAS_EXTENDED_TELEMETRY
 
 // helper functions
-static void set_telemetry(u8 offset, s32 value) {
+void set_telemetry(u8 offset, s32 value) {
     Telemetry.value[offset] = value;
     TELEMETRY_SetUpdated(offset);
 }
 
-static void update_cell(u8 cell, s32 value) {
+void update_cell(u8 cell, s32 value) {
     if (cell < 6) {
         Telemetry.value[TELEM_FRSKY_VOLT3] += value - Telemetry.value[TELEM_FRSKY_CELL1 + cell];
         TELEMETRY_SetUpdated(TELEM_FRSKY_VOLT3);    // battery total
@@ -402,7 +402,7 @@ static u32 discharge_dAms;   // deciAmp-milliseconds
 #include "frsky_d_telem.inc"
 
 
-static void processSportPacket(u8 *packet) {
+void processSportPacket(u8 *packet) {
 //    u8  instance = (packet[0] & 0x1F) + 1;
     u8  prim                = packet[1];
     u16 id                  = *((u16 *)(packet+2));
@@ -547,7 +547,7 @@ typedef enum {
 } SportStates;
 static SportStates dataState = STATE_DATA_IDLE;   // file scope so can be reset on loss of rx packet sync
 
-static void frsky_parse_sport_stream(u8 data) {
+void frsky_parse_sport_stream(u8 data) {
     static u8 sportRxBufferCount;
     static u8 sportRxBuffer[FRSKY_SPORT_PACKET_SIZE];   // Receive buffer. 8 bytes (full packet)
 
@@ -599,7 +599,7 @@ static void frsky_parse_sport_stream(u8 data) {
 
 #endif // HAS_EXTENDED_TELEMETRY
 
-static void frsky_check_telemetry(u8 *pkt, u8 len) {
+void frsky_check_telemetry(u8 *pkt, u8 len) {
 //    u8 AD2gain = Model.proto_opts[PROTO_OPTS_AD2GAIN];
     // only process packets with the required id and packet length
     if (pkt[1] == (fixed_id & 0xff) && pkt[2] == (fixed_id >> 8) && pkt[0] == len-3) {
@@ -662,8 +662,7 @@ static const u8 telem_test[][17] = {
 #endif
 
   
-MODULE_CALLTYPE
-static u16 frskyx_cb() {
+u16 frskyx_cb() {
   u8 len;
 
 #ifdef EMULATOR
