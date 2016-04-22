@@ -200,7 +200,7 @@ static void frsky2way_build_data_packet()
 
 #if HAS_EXTENDED_TELEMETRY
 
-static void frsky_parse_telem_stream(u8 byte) {
+void frsky_parse_telem_stream(u8 byte) {
     static int8_t data_id;
     static uint8_t lowByte;
     static TS_STATE state = TS_IDLE;
@@ -422,7 +422,6 @@ static void frsky2way_parse_telem(u8 *pkt, int len)
 }
 
 
-MODULE_CALLTYPE
 static u16 frsky2way_cb()
 {
     if (state < FRSKY_BIND_DONE) {
