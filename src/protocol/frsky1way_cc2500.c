@@ -253,6 +253,9 @@ static void build_data_packet_1way()
     packet[14] = crc8(crc, packet, 14);
 //for(int i = 0; i < 15; i++) printf("%02x ", packet[i]); printf("\n");
 }
+
+
+MODULE_CALLTYPE
 static u16 frsky_cb()
 {
     if (state < FRSKY_BIND_DONE) {
